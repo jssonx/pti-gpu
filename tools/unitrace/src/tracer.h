@@ -18,7 +18,6 @@
 #include "trace_options.h"
 #include "utils.h"
 #include "ze_collector.h"
-#include "chromelogger.h"
 #include "unimemory.h"
 
 static std::string GetChromeTraceFileName(void) {
@@ -67,15 +66,6 @@ class UniTracer {
         tracer->CheckOption(TRACE_CHROME_DEVICE_LOGGING) ||
         tracer->CheckOption(TRACE_CHROME_KERNEL_LOGGING)) {
 
-      if (tracer->CheckOption(TRACE_CHROME_KERNEL_LOGGING)) {
-        ze_kcallback = ChromeLogger::ZeChromeKernelLoggingCallback;
-        // also set fcallback functions
-        ze_fcallback = ChromeLogger::ChromeCallLoggingCallback;
-      }
-      else if (tracer->CheckOption(TRACE_CHROME_DEVICE_LOGGING)) {
-        ze_kcallback = ChromeLogger::ZeChromeKernelLoggingCallback;
-      }
-
       collector_options.kernel_tracing = true;
       collector_options.device_timing = tracer->CheckOption(TRACE_DEVICE_TIMING);
       collector_options.device_timeline = tracer->CheckOption(TRACE_DEVICE_TIMELINE);
@@ -89,10 +79,6 @@ class UniTracer {
     if (tracer->CheckOption(TRACE_CALL_LOGGING) ||
         tracer->CheckOption(TRACE_CHROME_CALL_LOGGING) ||
         tracer->CheckOption(TRACE_HOST_TIMING)) {
-
-      if (tracer->CheckOption(TRACE_CHROME_CALL_LOGGING)) {
-        ze_fcallback = ChromeLogger::ChromeCallLoggingCallback;
-      }
 
       collector_options.api_tracing = true;
       collector_options.host_timing = tracer->CheckOption(TRACE_HOST_TIMING);
