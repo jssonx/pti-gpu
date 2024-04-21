@@ -384,7 +384,9 @@ class TraceBuffer {
         pkt.dur = UniTimer::GetTimeInUs(rec.end_time_ - rec.start_time_);
         pkt.cat = gpu_op;
         pkt.args = "\"id\": \"" + std::to_string(rec.kid_) + "\"";
-        logger_->Log(pkt.Stringify());
+        if (logger_ != nullptr) {
+          logger_->Log(pkt.Stringify());
+        }
       }
 
       if (!rec.implicit_scaling_) {
@@ -399,7 +401,9 @@ class TraceBuffer {
           pkt.dur = (uint64_t)(-1);
           pkt.cat = data_flow;
           pkt.rank = mpi_rank;
-          logger_->Log(pkt.Stringify());
+          if (logger_ != nullptr) {
+            logger_->Log(pkt.Stringify());
+          }
         }
 
         {
@@ -413,7 +417,9 @@ class TraceBuffer {
           pkt.dur = (uint64_t)(-1);
           pkt.cat = data_flow_sync;
           pkt.rank = mpi_rank;
-          logger_->Log(pkt.Stringify());
+          if (logger_ != nullptr) {
+            logger_->Log(pkt.Stringify());
+          }
         }
       }
     }
@@ -503,7 +509,9 @@ class TraceBuffer {
       pkt.rank = mpi_rank;
       pkt.name = rec.name_;
 
-      logger_->Log(pkt.Stringify());
+      if (logger_ != nullptr) {
+        logger_->Log(pkt.Stringify());
+      }
     }
 
     void FlushHostBuffer() {
