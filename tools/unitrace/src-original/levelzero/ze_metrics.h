@@ -26,11 +26,11 @@
 #include <sstream>
 #include <thread>
 
-#include "logger.h" // utils
+#include "logger.h"
 #include "unimemory.h"
 #include "utils.h"
-#include "ze_utils.h" // utils
-#include "pti_assert.h" // utils
+#include "ze_utils.h"
+#include "pti_assert.h"
 
 
 constexpr static uint32_t max_metric_size = 512;

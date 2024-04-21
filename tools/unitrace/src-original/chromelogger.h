@@ -48,6 +48,8 @@ constexpr unsigned char cpu_op = 0;
 constexpr unsigned char gpu_op = 1;
 constexpr unsigned char data_flow = 2;
 constexpr unsigned char data_flow_sync = 3;
+constexpr unsigned char cl_data_flow = 4;
+constexpr unsigned char cl_data_flow_sync = 5;
 
 /* TraceDataPacket: It is a raw data structure which will store traces.
  * At the time of file write it will be converted into to std::string and write into the file.
@@ -81,11 +83,15 @@ typedef struct TraceDataPacket_ {
     str += ", \"tid\": " + std::to_string(tid);
     str += ", \"pid\": " + std::to_string(pid);
 
-    if (api_id != ZeKernelTracingId) {
-      // L0 kernel names are already demanged/
-      name = get_symbol(api_id);
+    if (api_id == ClKernelTracingId) {
+      name = utils::Demangle(name.data());
     }
-    
+    else {
+      if ((api_id != OpenClTracingId) && (api_id != XptiTracingId) && (api_id != IttTracingId) && (api_id != ZeKernelTracingId)) {
+        // L0 kernel names are already demanged/
+        name = get_symbol(api_id);
+      }
+    }
     if (!name.empty()) {
       if (name[0] == '\"') {
         // name is already quoted
@@ -116,6 +122,12 @@ typedef struct TraceDataPacket_ {
     }
     else if (cat == data_flow_sync) {
       str += ", \"cat\": \"Flow_D2H_" + std::to_string(id) + "_" + std::to_string(rank) + "\"";
+    }
+    else if (cat == cl_data_flow) {
+      str += ", \"cat\": \"CL_Flow_H2D_" + std::to_string(id) + "_" + std::to_string(rank) + "\"";
+    }
+    else if (cat == cl_data_flow_sync) {
+      str += ", \"cat\": \"CL_Flow_D2H_" + std::to_string(id) + "_" + std::to_string(rank) + "\"";
     }
 
     // It is always present
@@ -222,6 +234,72 @@ static std::tuple<uint32_t, uint32_t> GetDevicePidTid(ze_device_handle_t device,
     device_tid = next_device_tid_--;
     auto start_time = UniTimer::GetEpochTimeInUs(UniTimer::GetHostTimestamp());
     device_tid_map_.insert({{props->address, parent_device_id, device_id, subdevice_id, engine_ordinal, engine_index, host_pid, host_tid}, std::make_tuple(device_pid, device_tid,start_time)});
+  }
+
+  return std::tuple<uint32_t, uint32_t>(device_pid, device_tid);
+}
+
+struct ClDevicePidKey {
+  cl_device_pci_bus_info_khr pci_addr_;
+  cl_device_id device_;
+  int32_t host_pid_;
+};
+
+struct ClDeviceTidKey {
+  cl_device_pci_bus_info_khr pci_addr_;
+  cl_device_id device_;
+  cl_command_queue queue_;
+  int32_t host_pid_;
+  int32_t host_tid_;
+};
+
+struct ClDevicePidKeyCompare {
+  bool operator()(const ClDevicePidKey& lhs, const ClDevicePidKey& rhs) const {
+    return (memcmp((char *)(&lhs), (char *)(&rhs), sizeof(ClDevicePidKey)) < 0);
+  }
+};
+static std::map<ClDevicePidKey, std::tuple<uint32_t,uint64_t>, ClDevicePidKeyCompare> cl_device_pid_map_;
+struct ClDeviceTidKeyCompare {
+  bool operator()(const ClDeviceTidKey& lhs, const ClDeviceTidKey& rhs) const {
+    return (memcmp((char *)(&lhs), (char *)(&rhs), sizeof(ClDeviceTidKey)) < 0);
+  }
+};
+
+static std::map<ClDeviceTidKey, std::tuple<uint32_t, uint32_t, uint64_t>, ClDeviceTidKeyCompare> cl_device_tid_map_;
+
+static std::tuple<uint32_t, uint32_t> ClGetDevicePidTid(cl_device_pci_bus_info_khr& pci, cl_device_id device, cl_command_queue queue, int host_pid, int host_tid) {
+  if (device_logging_no_thread_) {
+    // map all threads to the process
+    host_tid = host_pid;
+  }
+
+  if (device_logging_no_engine_) {
+    // ignore engine ordinal and index
+    queue = (cl_command_queue)(-1);
+  }
+
+  uint32_t device_pid;
+  uint32_t device_tid;
+  const std::lock_guard<std::mutex> lock(device_pid_tid_map_lock_);
+   
+  auto it = cl_device_tid_map_.find({pci, device, queue, host_pid, host_tid});
+  if (it != cl_device_tid_map_.cend()) {
+    device_pid = std::get<0>(it->second);
+    device_tid = std::get<1>(it->second);
+  }
+  else {
+    auto it2 = cl_device_pid_map_.find({pci, device, host_pid});
+    if (it2 != cl_device_pid_map_.cend()) {
+      device_pid = std::get<0>(it2->second);
+    }
+    else {
+      device_pid = next_device_pid_--;
+      auto start_time = UniTimer::GetEpochTimeInUs(UniTimer::GetHostTimestamp());
+      cl_device_pid_map_.insert({{pci, device, host_pid}, std::make_tuple(device_pid, start_time)});
+    }
+    device_tid = next_device_tid_--;
+    auto start_time = UniTimer::GetEpochTimeInUs(UniTimer::GetHostTimestamp());
+    cl_device_tid_map_.insert({{pci, device, queue, host_pid, host_tid}, std::make_tuple(device_pid, device_tid, start_time)});
   }
 
   return std::tuple<uint32_t, uint32_t>(device_pid, device_tid);
@@ -577,6 +655,117 @@ class TraceBuffer {
 
 thread_local TraceBuffer thread_local_buffer_;
 
+// TODO: unify trace buffers for both L0 and OCL
+class ClTraceBuffer;
+std::set<ClTraceBuffer *> *cl_trace_buffers_ = nullptr;
+class ClTraceBuffer {
+  public:
+    ClTraceBuffer() {
+      if (utils::GetEnv("UNITRACE_ChromeEventBufferSize").empty()) {
+        max_num_buffered_events_ = -1;
+      }
+      else {
+        max_num_buffered_events_ = std::stoi(utils::GetEnv("UNITRACE_ChromeEventBufferSize"));
+      }
+      if (max_num_buffered_events_ > 0) {
+        buffer_.reserve(max_num_buffered_events_);
+      }
+      tid_= utils::GetTid();
+      pid_= utils::GetPid();
+      flushed_ = false;
+      finalized_.store(false, std::memory_order_release);
+      std::lock_guard<std::recursive_mutex> lock(logger_lock_);
+      
+      if (cl_trace_buffers_ == nullptr) {
+        cl_trace_buffers_ = new std::set<ClTraceBuffer *>;
+        UniMemory::ExitIfOutOfMemory((void *)(cl_trace_buffers_));
+      }
+      cl_trace_buffers_->insert(this);
+    }
+
+    ~ClTraceBuffer() {
+      std::lock_guard<std::recursive_mutex> lock(logger_lock_);
+      if (!finalized_.exchange(true)) {
+        // finalize if not finalized
+        if (!flushed_) {
+          for(auto& ele : buffer_) {
+            logger_->Log(ele.Stringify());
+          }
+          cl_trace_buffers_->erase(this);
+          flushed_ = true;
+        }
+      }
+    }
+
+    ClTraceBuffer(const ClTraceBuffer& that) = delete;
+    ClTraceBuffer& operator=(const ClTraceBuffer& that) = delete;
+
+    void Buffer(TraceDataPacket& pkt) {
+      buffer_.push_back(pkt);
+      flushed_ = false;
+      if (max_num_buffered_events_ != -1) {
+        if (buffer_.size() >= max_num_buffered_events_) {
+          FlushBuffer();
+        }
+      }
+    }
+
+    void BufferWithPidTid(TraceDataPacket& pkt) {
+      pkt.tid = tid_;
+      pkt.pid = pid_;
+      buffer_.push_back(pkt);
+      flushed_ = false;
+      if (max_num_buffered_events_ != -1) {
+        if (buffer_.size() >= max_num_buffered_events_) {
+          FlushBuffer();
+        }
+      }
+    }
+
+    uint32_t GetTid() { return tid_; }
+    uint32_t GetPid() { return pid_; }
+
+    void FlushBuffer() {
+      std::lock_guard<std::recursive_mutex> lock(logger_lock_);
+      if (flushed_) {
+        return;
+      }
+
+      for(auto& ele : buffer_) {
+        logger_->Log(ele.Stringify());
+      }
+      buffer_.clear();
+      flushed_ = true;
+    }
+    
+    void Finalize() {
+      
+      std::lock_guard<std::recursive_mutex> lock(logger_lock_);
+      if (!finalized_.exchange(true)) {
+        // finalize if not finalized
+        if (!flushed_) {
+          for(auto& ele : buffer_) {
+            logger_->Log(ele.Stringify());
+          }
+          flushed_ = true;
+        }
+      }
+    }
+    
+    bool IsFinalized() {
+      return finalized_.load(std::memory_order_acquire);
+    }
+    
+  private:
+    int32_t max_num_buffered_events_;
+    uint32_t tid_;
+    uint32_t pid_;
+    std::vector<TraceDataPacket> buffer_;
+    bool flushed_;
+    std::atomic<bool> finalized_;
+};
+
+thread_local ClTraceBuffer cl_thread_local_buffer_;
 
 class ChromeLogger {
   private:
@@ -628,6 +817,13 @@ class ChromeLogger {
           for (auto it = trace_buffers_->begin(); it != trace_buffers_->end();) {
             (*it)->Finalize();
             it = trace_buffers_->erase(it);
+          }
+        }
+
+        if (cl_trace_buffers_) {
+          for (auto it = cl_trace_buffers_->begin(); it != cl_trace_buffers_->end();) {
+            (*it)->Finalize();
+            it = cl_trace_buffers_->erase(it);
           }
         }
 
@@ -700,6 +896,59 @@ class ChromeLogger {
           }
         }
     
+        for (auto it = cl_device_pid_map_.cbegin(); it != cl_device_pid_map_.cend(); it++) {
+          uint32_t device_pid = std::get<0>(it->second);
+          str += ",\n{\"ph\": \"M\", \"name\": \"process_name\", \"pid\": " + std::to_string(device_pid) +
+                 ", \"ts\": " + std::to_string(std::get<1>(it->second)) + ", \"args\": {\"name\": \"";
+          if (rank.empty()) {
+            str += "DEVICE<" + pmi_hostname + ">";
+          }
+          else {
+            str += "RANK " + std::to_string(mpi_rank) + " DEVICE<" + pmi_hostname + ">";
+          }
+
+          char str2[128];
+          snprintf(str2, sizeof(str2), "%x", it->first.pci_addr_.pci_domain);
+          str += std::string(str2) + ":";
+          snprintf(str2, sizeof(str2), "%x", it->first.pci_addr_.pci_bus);
+          str += std::string(str2) + ":";
+          snprintf(str2, sizeof(str2), "%x", it->first.pci_addr_.pci_device);
+          str += std::string(str2) + ":";
+          snprintf(str2, sizeof(str2), "%x", it->first.pci_addr_.pci_function);
+          str += std::string(str2);
+
+          str += "\"}}"; 
+        }
+        for (auto it = cl_device_tid_map_.cbegin(); it != cl_device_tid_map_.cend(); it++) {
+          uint32_t device_pid = std::get<0>(it->second);
+          uint32_t device_tid = std::get<1>(it->second);
+          str += ",\n{\"ph\": \"M\", \"name\": \"thread_name\", \"pid\": " + std::to_string(device_pid) +
+                 ", \"tid\": " + std::to_string(device_tid) +
+                 ", \"ts\": " + std::to_string(std::get<2>(it->second)) + ", \"args\": {\"name\": \"";
+          if (device_logging_no_thread_) {
+            if (device_logging_no_engine_) {
+              str += "CL\"}}";
+            }
+            else {
+              char str2[128];
+
+              snprintf(str2, sizeof(str2), "%p", it->first.queue_);
+              str += "CL Queue<" + std::string(str2) + ">\"}}"; 
+            }
+          }
+          else {
+            if (device_logging_no_engine_) {
+              str += "Thread " + std::to_string(it->first.host_tid_) + " CL\"}}"; 
+            }
+            else {
+              char str2[128];
+
+              snprintf(str2, sizeof(str2), "%p", it->first.queue_);
+              str += "Thread " + std::to_string(it->first.host_tid_) + " CL Queue<" + std::string(str2) + ">\"}}"; 
+            }
+          }
+        }
+    
         str += "\n]\n}\n";
       
         logger_->Log(str);
@@ -716,6 +965,36 @@ class ChromeLogger {
 
     bool CheckOption(uint32_t option) {
       return options_.CheckFlag(option);
+    }
+
+    static void XptiLoggingCallback(EVENT_TYPE etype, const char *name, uint64_t start_ts, uint64_t end_ts) {
+      if (!thread_local_buffer_.IsFinalized()) {
+        HostEventRecord *rec = thread_local_buffer_.GetHostEvent();
+
+        rec->type_ = etype;
+        rec->name_ = name;
+        rec->api_id_ = XptiTracingId;
+        rec->start_time_ = start_ts;
+        if (etype == EVENT_COMPLETE) {
+          rec->end_time_ = end_ts;
+        }
+        rec->id_ = 0;
+        thread_local_buffer_.BufferHostEvent();
+      }
+    }
+
+    static void IttLoggingCallback(const char *name, uint64_t start_ts, uint64_t end_ts) {
+      if (!thread_local_buffer_.IsFinalized()) {
+        HostEventRecord *rec = thread_local_buffer_.GetHostEvent();
+
+        rec->type_ = EVENT_COMPLETE;
+        rec->name_ = name;
+        rec->api_id_ = IttTracingId;
+        rec->start_time_ = start_ts;
+        rec->end_time_ = end_ts;
+        rec->id_ = 0;
+        thread_local_buffer_.BufferHostEvent();
+      }
     }
 
     static void ZeChromeKernelLoggingCallback(uint64_t kid, uint64_t tid, uint64_t start, uint64_t end, uint32_t ordinal, uint32_t index, int32_t tile, const ze_device_handle_t device, const uint64_t kernel_command_id, bool implicit_scaling, const ze_group_count_t &group_count, size_t mem_size) {
@@ -740,6 +1019,117 @@ class ChromeLogger {
       rec->mem_size_ = mem_size;
       thread_local_buffer_.BufferDeviceEvent();
 
+    }
+
+    // OnenCL tracer callbacks.
+    // TODO: remove TraceDataPacket for performance
+    static void ClChromeKernelLoggingCallback(
+      cl_device_pci_bus_info_khr& pci,
+      cl_device_id device,
+      cl_command_queue& queue,
+      int tile,
+      bool implicit, 
+      const uint64_t id,
+      const std::string& name,
+      uint64_t queued,
+      uint64_t submitted,
+      uint64_t started,
+      uint64_t ended) {
+
+      if (cl_thread_local_buffer_.IsFinalized()) {
+        return;
+      }
+
+      auto [device_pid, device_tid] = ClGetDevicePidTid(pci, device, queue, utils::GetPid(), utils::GetTid());
+  
+      PTI_ASSERT(ended > started);
+      if (implicit) {
+        {
+          TraceDataPacket pkt;
+          pkt.ph = 'X';
+          pkt.tid = device_tid,
+          pkt.pid = device_pid;
+          pkt.name = "Tile #" + std::to_string(tile) + ": " + name;
+          pkt.ts = UniTimer::GetEpochTimeInUs(started);
+          //pkt.dur = UniTimer::GetEpochTimeInUs(ended) - UniTimer::GetEpochTimeInUs(started);
+          pkt.dur = UniTimer::GetTimeInUs(ended - started);
+          pkt.args = "\"id\": \""+std::to_string(id)+"\"";
+          pkt.cat = gpu_op;
+          pkt.api_id = ClKernelTracingId;
+          cl_thread_local_buffer_.Buffer(pkt);
+        }
+
+        {
+          TraceDataPacket pkt;
+          pkt.ph = 's';
+          pkt.tid = device_tid;
+          pkt.pid = device_pid;
+          pkt.api_id = DepTracingId;
+          pkt.id = id;
+          pkt.ts = UniTimer::GetEpochTimeInUs(started);
+          pkt.dur = (uint64_t)(-1);
+          pkt.cat = cl_data_flow;
+          pkt.rank = mpi_rank;
+          cl_thread_local_buffer_.Buffer(pkt);
+        }
+
+        {
+          TraceDataPacket pkt;
+          pkt.ph = 's';
+          pkt.tid = device_tid;
+          pkt.pid = device_pid;
+          pkt.api_id = DepTracingId;
+          pkt.id = id;
+          pkt.ts = UniTimer::GetEpochTimeInUs(started);
+          pkt.dur = (uint64_t)(-1);
+          pkt.cat = cl_data_flow_sync;
+          pkt.rank = mpi_rank;
+          cl_thread_local_buffer_.Buffer(pkt);
+        }
+      }
+      else {
+        {
+          TraceDataPacket pkt;
+          pkt.ph = 'X';
+          pkt.tid = device_tid;
+          pkt.pid = device_pid;
+          pkt.name = name;
+          pkt.ts = UniTimer::GetEpochTimeInUs(started);
+          //pkt.dur = UniTimer::GetEpochTimeInUs(ended) - UniTimer::GetEpochTimeInUs(started)
+          pkt.dur = UniTimer::GetTimeInUs(ended - started);
+          pkt.args = "\"id\": \""+std::to_string(id)+"\"";
+          pkt.cat = gpu_op;
+          pkt.api_id = ClKernelTracingId;
+          cl_thread_local_buffer_.Buffer(pkt);
+        }
+        {
+          TraceDataPacket pkt;
+          pkt.ph = 's';
+          pkt.tid = device_tid;
+          pkt.pid = device_pid;
+          pkt.api_id = DepTracingId;
+          pkt.id = id;
+          pkt.ts = UniTimer::GetEpochTimeInUs(started);
+          pkt.dur = (uint64_t)(-1);
+          pkt.cat = cl_data_flow;
+          pkt.rank = mpi_rank;
+          cl_thread_local_buffer_.Buffer(pkt);
+        }
+
+        {
+          TraceDataPacket pkt;
+          pkt.ph = 's';
+          pkt.tid = device_tid;
+          pkt.pid = device_pid;
+          pkt.api_id = DepTracingId;
+          pkt.id = id;
+          pkt.ts = UniTimer::GetEpochTimeInUs(started);
+          pkt.dur = (uint64_t)(-1);
+          pkt.cat = cl_data_flow_sync;
+          pkt.rank = mpi_rank;
+          cl_thread_local_buffer_.Buffer(pkt);
+        }
+      }
     }
 
     static void ChromeCallLoggingCallback(std::vector<uint64_t> *kids, FLOW_DIR flow_dir, API_TRACING_ID api_id,
@@ -779,6 +1169,75 @@ class ChromeLogger {
           rec->start_time_ = started;
           rec->id_ = id;
           thread_local_buffer_.BufferHostEvent();
+        }
+      }
+    }
+
+    static void ClChromeCallLoggingCallback(std::vector<uint64_t> *kids, FLOW_DIR flow_dir, const std::string& name,
+      uint64_t started, uint64_t ended) {
+      if (thread_local_buffer_.IsFinalized()) {
+        return;
+      }
+
+      {
+        TraceDataPacket pkt{};
+        pkt.ph = 'X';
+        pkt.tid = utils::GetTid();
+        pkt.pid = utils::GetPid();
+        pkt.name = name;
+        pkt.api_id = OpenClTracingId;
+        pkt.ts = UniTimer::GetEpochTimeInUs(started);
+        //pkt.dur = UniTimer::GetEpochTimeInUs(ended) - UniTimer::GetEpochTimeInUs(started);
+        pkt.dur = UniTimer::GetTimeInUs(ended - started);
+        pkt.cat = cpu_op;
+
+        std::string str_kids="";
+        if (kids == nullptr) {
+          str_kids = "0";
+        }
+        else {
+          int i = 0;
+          for (auto id : *kids) {
+            if (i != 0) {
+              str_kids += ",";
+            }
+            str_kids += std::to_string(id);
+            i++;
+          }
+        }
+        pkt.args = "\"id\": \"" + str_kids + "\"";
+        cl_thread_local_buffer_.Buffer(pkt);
+      }
+
+      if ((kids != nullptr) && (flow_dir == FLOW_H2D)) {
+        for (auto id : *kids) {
+          TraceDataPacket pkt{};
+          pkt.ph = 's';
+          pkt.tid = utils::GetTid();
+          pkt.pid = utils::GetPid();
+          pkt.api_id = DepTracingId;
+          pkt.id = id;
+          pkt.ts = UniTimer::GetEpochTimeInUs(started);
+          pkt.dur = (uint64_t)(-1);
+          pkt.cat = data_flow;
+          pkt.rank = mpi_rank;
+          cl_thread_local_buffer_.Buffer(pkt);
+        }
+      }
+
+      if ((kids != nullptr) && (flow_dir == FLOW_D2H)) {
+        for (auto id : *kids) {
+          TraceDataPacket pkt{};
+          pkt.ph = 't';
+          pkt.tid = utils::GetTid();
+          pkt.pid = utils::GetPid();
+          pkt.api_id = DepTracingId;
+          pkt.id = id;
+          pkt.ts = UniTimer::GetEpochTimeInUs(started);
+          pkt.dur = (uint64_t)(-1);
+          pkt.cat = data_flow_sync;
+          pkt.rank = mpi_rank;
+          cl_thread_local_buffer_.Buffer(pkt);
         }
       }
     }

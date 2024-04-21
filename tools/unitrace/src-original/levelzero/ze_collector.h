@@ -25,10 +25,10 @@
 #include <level_zero/ze_api.h>
 #include <level_zero/layers/zel_tracing_api.h>
 
-#include "correlator.h" // utils
-#include "utils.h" // utils
+#include "correlator.h"
+#include "utils.h"
 #include "ze_event_cache.h"
-#include "ze_utils.h" // utils
+#include "ze_utils.h"
 #include "collector_options.h"
 #include "unikernel.h"
 #include "unitimer.h"
