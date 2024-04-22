@@ -76,15 +76,12 @@ add_library(unitrace_tool SHARED
   "${PROJECT_SOURCE_DIR}/src/tracer.cc")
 target_compile_options(unitrace_tool PRIVATE -g -O0)
 link_directories(${ONEAPI_COMPILER_HOME}/lib)
-find_package(Xptifw REQUIRED)
-target_link_libraries(unitrace_tool PRIVATE Xptifw::Xptifw)
 target_include_directories(unitrace_tool
   PRIVATE "${PROJECT_SOURCE_DIR}"
   PRIVATE "${ONEAPI_COMPILER_HOME}/include"
   PRIVATE "${PROJECT_SOURCE_DIR}/src"
   PRIVATE "${PROJECT_SOURCE_DIR}/../utils"
   PRIVATE "${PROJECT_SOURCE_DIR}/../../utils"
-  PRIVATE "${PROJECT_SOURCE_DIR}/src/xpti"
   PRIVATE "${PROJECT_SOURCE_DIR}/src/levelzero")
 target_compile_definitions(unitrace_tool PUBLIC PTI_LEVEL_ZERO=1)
 if(CMAKE_INCLUDE_PATH)
