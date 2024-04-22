@@ -20,21 +20,6 @@
 #include "ze_collector.h"
 #include "unimemory.h"
 
-static std::string GetChromeTraceFileName(void) {
-  std::ifstream comm("/proc/self/comm");
-  if (comm) {
-    std::string name;
-    std::getline(comm, name);
-    comm.close();
-    if (!name.empty()) {
-      return std::move(name);
-    }
-  }
-
-  // should never get here
-  return "unitrace";
-}
-
 class UniTracer {
  public:
   static UniTracer* Create(const TraceOptions& options) {
@@ -47,19 +32,12 @@ class UniTracer {
 
     //TODO: cleanup option setting
     CollectorOptions collector_options;
-    collector_options.device_timing = false;
-    collector_options.kernel_submission = false;
-    collector_options.host_timing = false;
-    collector_options.kernel_tracing = false;
-    collector_options.api_tracing = false;
-    collector_options.metric_query = false;
     collector_options.metric_stream = false;
     collector_options.stall_sampling = false;
     OnZeKernelFinishCallback ze_kcallback = nullptr;
     OnZeFunctionFinishCallback ze_fcallback = nullptr;
     ZeCollector* ze_collector = nullptr;
 
-        
     if (tracer->CheckOption(TRACE_DEVICE_TIMING) ||
         tracer->CheckOption(TRACE_DEVICE_TIMELINE) ||
         tracer->CheckOption(TRACE_KERNEL_SUBMITTING) ||
@@ -74,7 +52,6 @@ class UniTracer {
       collector_options.demangle = tracer->CheckOption(TRACE_DEMANGLE);
       collector_options.kernels_per_tile = tracer->CheckOption(TRACE_KERNELS_PER_TILE);
     }
-
 
     if (tracer->CheckOption(TRACE_CALL_LOGGING) ||
         tracer->CheckOption(TRACE_CHROME_CALL_LOGGING) ||
@@ -121,10 +98,6 @@ class UniTracer {
       delete ze_collector_;
     }
 
-    // report after ze_collector_ is destructed
-    // local stats are sweeped in deconstructor
-    Report();
-
     if (CheckOption(TRACE_LOG_TO_FILE)) {
       std::cerr << "[INFO] Log is stored in " <<
         options_.GetLogFileName() << std::endl;
@@ -143,160 +116,6 @@ class UniTracer {
       : options_(options),
         correlator_(options.GetLogFileName(),
           CheckOption(TRACE_CONDITIONAL_COLLECTION)) {
-  }
-
-  static uint64_t CalculateTotalFunctionTime(const ZeCollector* collector) {
-    return collector->CalculateTotalFunctionTime();
-  }
-
-  static uint64_t CalculateTotalKernelTime(const ZeCollector* collector) {
-    return collector->CalculateTotalKernelTime();
-  }
-
-  void PrintFunctionTable(
-      const ZeCollector* collector, const char* device_type) {
-    PTI_ASSERT(collector != nullptr);
-    PTI_ASSERT(device_type != nullptr);
-
-    uint64_t total_duration = CalculateTotalFunctionTime(collector);
-    if (total_duration > 0) {
-      std::string str("\n== ");
-      str += std::string(device_type) + " Backend ==\n\n";
-      correlator_.Log(str);
-      collector->PrintFunctionsTable();
-    }
-  }
-
-  void PrintKernelTable(
-      const ZeCollector* collector, const char* device_type) {
-    PTI_ASSERT(collector != nullptr);
-    PTI_ASSERT(device_type != nullptr);
-
-    uint64_t total_duration = CalculateTotalKernelTime(collector);
-    if (total_duration > 0) {
-      std::string str("\n== ");
-      str += std::string(device_type) + " Backend ==\n\n";
-      correlator_.Log(str);
-      collector->PrintKernelsTable();
-    }
-  }
-
-  void PrintSubmissionTable(
-      const ZeCollector* collector, const char* device_type) {
-    PTI_ASSERT(collector != nullptr);
-    PTI_ASSERT(device_type != nullptr);
-
-    uint64_t total_duration = CalculateTotalKernelTime(collector);
-    if (total_duration > 0) {
-      std::string str("\n== ");
-      str += std::string(device_type) + " Backend ==\n\n";
-      correlator_.Log(str);
-      collector->PrintSubmissionTable();
-    }
-  }
-
-
-  template <class L0Collector>
-  void ReportTiming(
-      const L0Collector* ze_collector,
-      const char* type) {
-    PTI_ASSERT(ze_collector != nullptr);
-
-    std::string stype = std::string(type);
-
-    std::string ze_title =
-      std::string("Total ") + stype +
-      " Time for L0 backend (ns): ";
-    size_t title_width = ze_title.size();
-    const size_t time_width = 20;
-
-    std::string str("\n=== ");
-    str += stype + " Timing Summary ===\n\n" + 
-           std::string(std::max(int(title_width - sizeof("Total Execution Time (ns): ") + 1), 0), ' ') +
-           "Total Execution Time (ns): " +
-           std::string(std::max(int(time_width - std::to_string(total_execution_time_).length()), 0), ' ') +
-           std::to_string(total_execution_time_) + 
-           "\n";
-
-    if (ze_collector != nullptr) {
-      uint64_t total_time = 0;
-      if (stype == "API") {
-        total_time = CalculateTotalFunctionTime(ze_collector);
-      }
-      if (stype == "Device") {
-        total_time = CalculateTotalKernelTime(ze_collector);
-      }
-      if (total_time > 0) {
-        str += std::string(std::max(int(title_width - ze_title.length()), 0), ' ') + ze_title +
-               std::string(std::max(int(time_width - std::to_string(total_time).length()), 0), ' ') + std::to_string(total_time) +
-               "\n";
-      }
-    }
-
-    correlator_.Log(str);
-
-    if (ze_collector != nullptr) {
-      if (stype == "API") {
-        PrintFunctionTable(ze_collector, "L0");
-      }
-      if (stype == "Device") {
-        PrintKernelTable(ze_collector, "L0");
-      }
-    }
-
-    correlator_.Log("\n");
-  }
-
-  void ReportKernelSubmission(
-      const ZeCollector* ze_collector,
-      const char* type) {
-    PTI_ASSERT(ze_collector != nullptr);
-
-    std::string ze_title =
-      std::string("Total ") + std::string(type) +
-      " Time for L0 backend (ns): ";
-    size_t title_width = ze_title.size();
-    const size_t time_width = 20;
-
-    std::string str("\n=== Kernel Submission Summary ===\n\n");
-    str += std::string(std::max(int(title_width - sizeof("Total Execution Time (ns): ") + 1), 0), ' ') + "Total Execution Time (ns): " +
-           std::string(std::max(int(time_width - std::to_string(total_execution_time_).length()), 0), ' ') + std::to_string(total_execution_time_)           + "\n";
-
-    if (ze_collector != nullptr) {
-      uint64_t total_time = CalculateTotalKernelTime(ze_collector);
-      if (total_time > 0) {
-        str += std::string(std::max(int(title_width - ze_title.length()), 0), ' ') + ze_title +
-               std::string(std::max(int(time_width - std::to_string(total_time).length()), 0), ' ') + std::to_string(total_time) +
-               "\n";
-      }
-    }
-
-    correlator_.Log(str);
-
-    if (ze_collector != nullptr) {
-      PrintSubmissionTable(ze_collector, "L0");
-    }
-
-    correlator_.Log("\n");
-  }
-
-  void Report() {
-    if (CheckOption(TRACE_HOST_TIMING)) {
-      ReportTiming(
-          ze_collector_,
-          "API");
-    }
-    if (CheckOption(TRACE_DEVICE_TIMING)) {
-      ReportTiming(
-          ze_collector_,
-          "Device");
-    }
-    if (CheckOption(TRACE_KERNEL_SUBMITTING)) {
-      ReportKernelSubmission(
-          ze_collector_,
-          "Device");
-    }
-    correlator_.Log("\n");
   }
 
  private:
