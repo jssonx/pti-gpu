@@ -12,7 +12,7 @@ option(BUILD_WITH_MPI
   ON
 )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -g -fvisibility=default")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -g -O0 -fvisibility=default")
 
 # Tool Library
 macro(FindHeadersPath TARGET L0_GEN_SCRIPT GEN_FILE_NAME custom_target)
@@ -74,6 +74,7 @@ add_library(unitrace_tool SHARED
   "${PROJECT_SOURCE_DIR}/../utils/correlator.cc"
   "${PROJECT_SOURCE_DIR}/../../utils/trace_guard.cc"
   "${PROJECT_SOURCE_DIR}/src/tracer.cc")
+target_compile_options(unitrace_tool PRIVATE -g -O0)
 link_directories(${ONEAPI_COMPILER_HOME}/lib)
 find_package(Xptifw REQUIRED)
 target_link_libraries(unitrace_tool PRIVATE Xptifw::Xptifw)

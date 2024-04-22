@@ -2,7 +2,6 @@
 **/__pycache__
 build*/
 venv/
-.vscode/
 .vim/
 .cache/
 compile_commands.json
