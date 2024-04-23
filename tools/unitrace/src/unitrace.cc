@@ -18,8 +18,6 @@
 
 #include "ze_metrics.h"
 #include "utils.h"
-#include "version.h"
-#include "unitrace_commit_hash.h"
 
 #define LIB_UNITRACE_TOOL_NAME	"libunitrace_tool.so"
 
@@ -27,39 +25,12 @@ static ZeMetricProfiler* metric_profiler = nullptr;
 
 void Usage(char * progname) {
   std::cout <<
-    "Usage: " << progname << " [options] <application> <args>" <<
-    std::endl;
-  std::cout <<
-    "--metric-query [-q]            " <<
-    "Query hardware metrics for each kernel instance" <<
-    std::endl;
-  std::cout <<
-    "--metric-sampling [-k]         " <<
-    "Sample hardware performance metrics for each kernel instance in time-based mode" <<
-    std::endl;
-  std::cout <<
-    "--group [-g] <metric-group>    " <<
-    "Hardware metric group (ComputeBasic by default)" <<
-    std::endl;
-  std::cout <<
     "--sampling-interval [-i] <interval> " <<
     "Hardware performance metric sampling interval in us (default is 50 us) in time-based mode" <<
     std::endl;
   std::cout <<
-    "--device-list                  " <<
-    "Print available devices" <<
-    std::endl;
-  std::cout <<
-    "--metric-list                  " <<
-    "Print available metric groups and metrics" <<
-    std::endl;
-  std::cout <<
     "--stall-sampling               " <<
     "Sample hardware execution unit stalls. Valid for Intel(R) Data Center GPU Max Series and later GPUs" <<
-    std::endl;
-  std::cout <<
-    "--version                      " <<
-    "Print version" <<
     std::endl;
 }
 
@@ -71,48 +42,14 @@ void SetProfilingEnvironment() {
   utils::SetEnv("ZET_ENABLE_METRICS", "1");
 }
 
-void SetSysmanEnvironment() {
-  utils::SetEnv("ZES_ENABLE_SYSMAN", "1");
-}
-
 int ParseArgs(int argc, char* argv[]) {
-  bool show_metric_list = false;
   bool stall_sampling = false;
   bool metric_sampling = false;
   int app_index = 1;
 
   for (int i = 1; i < argc; ++i) {
-    if (strcmp(argv[i], "--call-logging") == 0 || strcmp(argv[i], "-c") == 0) {
-      utils::SetEnv("UNITRACE_CallLogging", "1");
-      ++app_index;
-    } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
-      utils::SetEnv("UNITRACE_Verbose", "1");
-      ++app_index;
-    } else if (strcmp(argv[i], "--demangle") == 0) {
-      utils::SetEnv("UNITRACE_Demangle", "1");
-      ++app_index;
-    } else if (strcmp(argv[i], "--output-dir-path") == 0) {
-      ++i;
-      utils::SetEnv("UNITRACE_TraceOutputDirPath", "1");
-      utils::SetEnv("UNITRACE_TraceOutputDir", argv[i]);
-      app_index += 2;
-    } else if (strcmp(argv[i], "--metric-query") == 0 || strcmp(argv[i], "-q") == 0) {
-      utils::SetEnv("UNITRACE_MetricQuery", "1");
-      ++app_index;
-    } else if (strcmp(argv[i], "--group") == 0 || strcmp(argv[i], "-g") == 0) {
-      ++i;
-      if (i >= argc) {
-        std::cout << "[ERROR] Metric group is not specified" << std::endl;
-        return -1;
-      }
-      utils::SetEnv("UNITRACE_MetricGroup", argv[i]);
-      app_index += 2;
-    } else if (strcmp(argv[i], "--stall-sampling") == 0) {
+    if (strcmp(argv[i], "--stall-sampling") == 0) {
       stall_sampling = true;
-      ++app_index;
-    } else if (strcmp(argv[i], "--metric-sampling") == 0 || strcmp(argv[i], "-k") == 0) {
-      utils::SetEnv("UNITRACE_KernelMetrics", "1");
-      metric_sampling = true;
       ++app_index;
     } else if (strcmp(argv[i], "--sampling-interval") == 0 || strcmp(argv[i], "-i") == 0) {
       ++i;
@@ -122,19 +59,6 @@ int ParseArgs(int argc, char* argv[]) {
       }
       utils::SetEnv("UNITRACE_SamplingInterval", argv[i]);
       app_index += 2;
-    } else if (strcmp(argv[i], "--device-list") == 0) {
-      SetSysmanEnvironment();	// enable ZES_ENABLE_SYSMAN
-      PrintDeviceList();
-      return 0;
-    } else if (strcmp(argv[i], "--metric-list") == 0) {
-      show_metric_list = true;
-      ++app_index;
-    } else if (strcmp(argv[i], "--version") == 0) {
-      std::cout << UNITRACE_VERSION << " (" << COMMIT_HASH << ")" << std::endl;
-      return 0;
-    } else if (strcmp(argv[i], "--chrome-itt-logging") == 0 ) {
-      utils::SetEnv("UNITRACE_ChromeIttLogging", "1");
-      ++app_index;
     } else {
       break;
     }
@@ -185,14 +109,6 @@ int ParseArgs(int argc, char* argv[]) {
 
   if (utils::GetEnv("UNITRACE_ChromeEventBufferSize").empty()) {
     utils::SetEnv("UNITRACE_ChromeEventBufferSize", "-1");	// does not hurt to set to default even if chrome logging is not enabled
-  }
-
-  if (show_metric_list) {
-    SetProfilingEnvironment();	// enable ZET_ENABLE_METRICS
-    std::string value = utils::GetEnv("UNITRACE_DeviceId");
-    uint32_t device_id = value.empty() ? 0 : std::stoul(value);
-    PrintMetricList(device_id);
-    return 0;
   }
 
   // __itt_pause()/__itt_resume() support always enabled
@@ -261,10 +177,6 @@ int main(int argc, char *argv[]) {
   else {
     fclose(fp);
   }
-
-  // Set unitrace version
-  auto unitrace_version =  std::string(UNITRACE_VERSION) + " (" +  std::string(COMMIT_HASH) + ")";
-  utils::SetEnv("UNITRACE_VERSION", unitrace_version.c_str());
 
   int app_index = ParseArgs(argc, argv);
   if (app_index <= 0 || app_index >= argc) {

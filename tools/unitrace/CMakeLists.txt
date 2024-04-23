@@ -39,15 +39,6 @@ macro(FindHeadersPath TARGET L0_GEN_SCRIPT GEN_FILE_NAME custom_target)
     ${custom_target})
 endmacro()
 
-# Get Git Commit Hash
-macro(GetGitCommitHash TARGET GET_COMMIT_HASH_SCRIPT COMMIT_HASH_FILE_NAME target)
-  RequirePythonInterp()
-
-  add_custom_target(${target} ALL DEPENDS ${CMAKE_BINARY_DIR}/${COMMIT_HASH_FILE_NAME})
-  add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/${COMMIT_HASH_FILE_NAME}
-                     COMMAND "${PYTHON_EXECUTABLE}" ${GET_COMMIT_HASH_SCRIPT} ${CMAKE_BINARY_DIR} ${COMMIT_HASH_FILE_NAME})
-  add_dependencies(${TARGET} ${target})
-endmacro()
 
 if (BUILD_WITH_MPI)
   find_package(MPI REQUIRED)
@@ -120,11 +111,6 @@ if(UNIX)
 endif()
 FindL0Library(unitrace)
 FindL0Headers(unitrace)
-GetGitCommitHash(unitrace "${PROJECT_SOURCE_DIR}/scripts/get_commit_hash.py" "unitrace_commit_hash.h" get_git_commit_hash_unitrace)
-GetGitCommitHash(unitrace_tool "${PROJECT_SOURCE_DIR}/scripts/get_commit_hash.py" "unitrace_tool_commit_hash.h" get_git_commit_hash_unitrace_tool)
-
-add_custom_command(TARGET unitrace POST_BUILD COMMAND "rm" "-rf" "unitrace_commit_hash.h")
-add_custom_command(TARGET unitrace_tool POST_BUILD COMMAND "rm" "-rf" "unitrace_tool_commit_hash.h")
 
 # Clearning files only for release build, for any other build types lets skip deletion for better debuggability
 string(TOLOWER "${CMAKE_BUILD_TYPE}" LOWER_CMAKE_BUILD_TYPE)

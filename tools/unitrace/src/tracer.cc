@@ -9,9 +9,6 @@
 #include "tracer.h"
 #include "unitimer.h"
 
-#include "version.h"
-#include "unitrace_tool_commit_hash.h"
-
 static UniTracer* tracer = nullptr;
 
 static TraceOptions ReadArgs() {
@@ -154,23 +151,10 @@ static TraceOptions ReadArgs() {
   return TraceOptions(flags, log_file);
 }
 
-std::string get_version() {
-  return std::string(UNITRACE_VERSION) + " ("+ std::string(COMMIT_HASH) + ")";
-}
-
 void __attribute__((constructor)) Init(void) {
   std::string value = utils::GetEnv("PTI_ENABLE");
   if (value != "1") {
     return;
-  }
-
-  std::string unitrace_version = utils::GetEnv("UNITRACE_VERSION");
-  if (unitrace_version.size() > 0) {
-    auto libunitrace_version = get_version();
-    if (unitrace_version.compare(libunitrace_version) != 0) {
-      std::cerr << "[ERROR] Versions of unitrace and libunitrace_tool.so do not match." << std::endl;
-      exit(-1);
-    }
   }
 
   if (!tracer) {
