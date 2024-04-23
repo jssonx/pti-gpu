@@ -13,9 +13,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#include <dlfcn.h>
-#include <stdlib.h>
-
 #include "ze_metrics.h"
 #include "utils.h"
 
@@ -44,7 +41,6 @@ void SetProfilingEnvironment() {
 
 int ParseArgs(int argc, char* argv[]) {
   bool stall_sampling = false;
-  bool metric_sampling = false;
   int app_index = 1;
 
   for (int i = 1; i < argc; ++i) {
@@ -65,33 +61,16 @@ int ParseArgs(int argc, char* argv[]) {
   }
 
   if (stall_sampling) {
-    if (metric_sampling && (utils::GetEnv("UNITRACE_MetricGroup") != "EuStallSampling")) {
-      std::cerr << "[ERROR] Stall sampling cannot be enabled together with other metric group sampling" << std::endl;
-      return 0;
-    }
     if (utils::GetEnv("UNITRACE_MetricGroup").empty()) {
       utils::SetEnv("UNITRACE_MetricGroup", "EuStallSampling");
     }
     utils::SetEnv("UNITRACE_KernelMetrics", "1");
   }
 
-  if (utils::GetEnv("UNITRACE_MetricQuery") == "1") {
-    if (utils::GetEnv("UNITRACE_RawMetrics") == "1" || utils::GetEnv("UNITRACE_KernelMetrics") == "1") {
-      std::cerr << "[ERROR] Hardware performance metric query mode cannot be used together with time-based mode" << std::endl;
-      return 0;
-    }
-  }
-
-  if ((utils::GetEnv("UNITRACE_MetricQuery") == "1") || (utils::GetEnv("UNITRACE_RawMetrics") == "1") || 
-    (utils::GetEnv("UNITRACE_KernelMetrics") == "1")) {
+  if (utils::GetEnv("UNITRACE_KernelMetrics") == "1") {
     // kernel tracing must be on 
-    if (utils::GetEnv("UNITRACE_DeviceTiming").empty() && utils::GetEnv("UNITRACE_ChromeKernelLogging").empty() && utils::GetEnv("UNITRACE_ChromeDeviceLogging").empty()) {
+    if (utils::GetEnv("UNITRACE_DeviceTiming").empty()) {
       utils::SetEnv("UNITRACE_DeviceTiming", "1");
-    }
-
-    // default metric group is "ComputeBasic"
-    if (utils::GetEnv("UNITRACE_MetricGroup").empty()) {
-      utils::SetEnv("UNITRACE_MetricGroup", "ComputeBasic");
     }
 
     // default sampling interval is 50 us
@@ -100,19 +79,6 @@ int ParseArgs(int argc, char* argv[]) {
       utils::SetEnv("UNITRACE_SamplingInterval", "50");
     }
   }
-
-  if (!utils::GetEnv("UNITRACE_SamplingInterval").empty() || !utils::GetEnv("UNITRACE_MetricGroup").empty()) {
-    if (utils::GetEnv("UNITRACE_DeviceTiming").empty() && utils::GetEnv("UNITRACE_ChromeKernelLogging").empty() && utils::GetEnv("UNITRACE_ChromeDeviceLogging").empty()) {
-      std::cerr << "[ERROR] No time-based hardware performance metric sampling option (-k/--stall-sampling) specified" << std::endl;
-    }
-  }
-
-  if (utils::GetEnv("UNITRACE_ChromeEventBufferSize").empty()) {
-    utils::SetEnv("UNITRACE_ChromeEventBufferSize", "-1");	// does not hurt to set to default even if chrome logging is not enabled
-  }
-
-  // __itt_pause()/__itt_resume() support always enabled
-  utils::SetEnv("INTEL_LIBITTNOTIFY64", "libunitrace_tool.so");
 
   return app_index;
 }
@@ -205,15 +171,11 @@ int main(int argc, char *argv[]) {
   }
 
   SetTracingEnvironment();
-  if (utils::GetEnv("UNITRACE_MetricQuery") == "1") {
-    // UNITRACE_RawMetrics or UNITRACE_KernelMetrics is not set
-    SetProfilingEnvironment();
-  }
 
   utils::SetEnv("LD_PRELOAD", preload.c_str());
   utils::SetEnv("PTI_ENABLE", "1");
 
-  if ((utils::GetEnv("UNITRACE_RawMetrics") == "1") || (utils::GetEnv("UNITRACE_KernelMetrics") == "1")) {
+  if (utils::GetEnv("UNITRACE_KernelMetrics") == "1") {
 
     // UNITRACE_MetricQuery is not set
     SetProfilingEnvironment();

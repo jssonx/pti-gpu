@@ -16,7 +16,7 @@
             "value": "/storage/users/yuning/pg/ra/pti-gpu/tools/unitrace/build/libunitrace_tool.so"
           }
         ],
-        "stopAtEntry": true,
+        "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "externalConsole": false,
         "MIMode": "gdb",
