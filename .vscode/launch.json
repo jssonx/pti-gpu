@@ -10,12 +10,7 @@
           "--stall-sampling",
           "/home/users/yuning/pg/qahpct/minitest/intelgpu/single.sycloffload.ipcx/single.sycloffload.icpx.intelgpu"
         ],
-        "environment": [
-          {
-            "name": "LD_PRELOAD",
-            "value": "/storage/users/yuning/pg/ra/pti-gpu/tools/unitrace/build/libunitrace_tool.so"
-          }
-        ],
+        "environment": [],
         "stopAtEntry": true,
         "cwd": "${workspaceFolder}",
         "externalConsole": false,
@@ -25,6 +20,11 @@
           {
             "description": "Enable pretty-printing for gdb",
             "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+          },
+          {
+            "description": "Set follow fork mode to debug child processes",
+            "text": "set follow-fork-mode child",
             "ignoreFailures": true
           }
         ]
