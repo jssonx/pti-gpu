@@ -27,7 +27,6 @@
 
 #include "correlator.h" // utils
 #include "utils.h" // utils
-#include "ze_event_cache.h"
 #include "ze_utils.h" // utils
 #include "collector_options.h"
 #include "unikernel.h"
@@ -51,257 +50,6 @@ enum ZeKernelCommandType {
   KERNEL_COMMAND_TYPE_COMPUTE = 1,
   KERNEL_COMMAND_TYPE_MEMORY = 2,
   KERNEL_COMMAND_TYPE_COMMAND = 3
-};
-
-enum ZeDeviceCommandHandle {
-  MemoryCopy = 0,
-  MemoryCopyH2H = MemoryCopy,
-  MemoryCopyH2D,
-  MemoryCopyH2M,
-  MemoryCopyH2S,
-  MemoryCopyD2H,
-  MemoryCopyD2D,
-  MemoryCopyD2M,
-  MemoryCopyD2S,
-  MemoryCopyM2H,
-  MemoryCopyM2D,
-  MemoryCopyM2M,
-  MemoryCopyM2S,
-  MemoryCopyS2H,
-  MemoryCopyS2D,
-  MemoryCopyS2M,
-  MemoryCopyS2S,
-  MemoryCopyRegion,
-  MemoryCopyRegionH2H = MemoryCopyRegion,
-  MemoryCopyRegionH2D,
-  MemoryCopyRegionH2M,
-  MemoryCopyRegionH2S,
-  MemoryCopyRegionD2H,
-  MemoryCopyRegionD2D,
-  MemoryCopyRegionD2M,
-  MemoryCopyRegionD2S,
-  MemoryCopyRegionM2H,
-  MemoryCopyRegionM2D,
-  MemoryCopyRegionM2M,
-  MemoryCopyRegionM2S,
-  MemoryCopyRegionS2H,
-  MemoryCopyRegionS2D,
-  MemoryCopyRegionS2M,
-  MemoryCopyRegionS2S,
-  MemoryCopyFromContext,
-  MemoryCopyFromContextH2H = MemoryCopyFromContext,
-  MemoryCopyFromContextH2D,
-  MemoryCopyFromContextH2M,
-  MemoryCopyFromContextH2S,
-  MemoryCopyFromContextD2H,
-  MemoryCopyFromContextD2D,
-  MemoryCopyFromContextD2M,
-  MemoryCopyFromContextD2S,
-  MemoryCopyFromContextM2H,
-  MemoryCopyFromContextM2D,
-  MemoryCopyFromContextM2M,
-  MemoryCopyFromContextM2S,
-  MemoryCopyFromContextS2H,
-  MemoryCopyFromContextS2D,
-  MemoryCopyFromContextS2M,
-  MemoryCopyFromContextS2S,
-  ImageCopy,
-  ImageCopyH2H = ImageCopy,
-  ImageCopyH2D,
-  ImageCopyH2M,
-  ImageCopyH2S,
-  ImageCopyD2H,
-  ImageCopyD2D,
-  ImageCopyD2M,
-  ImageCopyD2S,
-  ImageCopyM2H,
-  ImageCopyM2D,
-  ImageCopyM2M,
-  ImageCopyM2S,
-  ImageCopyS2H,
-  ImageCopyS2D,
-  ImageCopyS2M,
-  ImageCopyS2S,
-  ImageCopyRegion,
-  ImageCopyRegionH2H = ImageCopyRegion,
-  ImageCopyRegionH2D,
-  ImageCopyRegionH2M,
-  ImageCopyRegionH2S,
-  ImageCopyRegionD2H,
-  ImageCopyRegionD2D,
-  ImageCopyRegionD2M,
-  ImageCopyRegionD2S,
-  ImageCopyRegionM2H,
-  ImageCopyRegionM2D,
-  ImageCopyRegionM2M,
-  ImageCopyRegionM2S,
-  ImageCopyRegionS2H,
-  ImageCopyRegionS2D,
-  ImageCopyRegionS2M,
-  ImageCopyRegionS2S,
-  ImageCopyFromMemory,
-  ImageCopyFromMemoryH2H = ImageCopyFromMemory,
-  ImageCopyFromMemoryH2D,
-  ImageCopyFromMemoryH2M,
-  ImageCopyFromMemoryH2S,
-  ImageCopyFromMemoryD2H,
-  ImageCopyFromMemoryD2D,
-  ImageCopyFromMemoryD2M,
-  ImageCopyFromMemoryD2S,
-  ImageCopyFromMemoryM2H,
-  ImageCopyFromMemoryM2D,
-  ImageCopyFromMemoryM2M,
-  ImageCopyFromMemoryM2S,
-  ImageCopyFromMemoryS2H,
-  ImageCopyFromMemoryS2D,
-  ImageCopyFromMemoryS2M,
-  ImageCopyFromMemoryS2S,
-  ImageCopyToMemory,
-  ImageCopyToMemoryH2H = ImageCopyToMemory,
-  ImageCopyToMemoryH2D,
-  ImageCopyToMemoryH2M,
-  ImageCopyToMemoryH2S,
-  ImageCopyToMemoryD2H,
-  ImageCopyToMemoryD2D,
-  ImageCopyToMemoryD2M,
-  ImageCopyToMemoryD2S,
-  ImageCopyToMemoryM2H,
-  ImageCopyToMemoryM2D,
-  ImageCopyToMemoryM2M,
-  ImageCopyToMemoryM2S,
-  ImageCopyToMemoryS2H,
-  ImageCopyToMemoryS2D,
-  ImageCopyToMemoryS2M,
-  ImageCopyToMemoryS2S,
-  MemoryFill,
-  MemoryFillH = MemoryFill,
-  MemoryFillD,
-  MemoryFillM,
-  MemoryFillS,
-  Barrier,
-  MemoryRangesBarrier,
-  LastCommand = MemoryRangesBarrier
-};
-
-static const char *device_command_names[] = {
-  "zeCommandListAppendMemoryCopy(H2H)",
-  "zeCommandListAppendMemoryCopy(H2D)",
-  "zeCommandListAppendMemoryCopy(H2M)",
-  "zeCommandListAppendMemoryCopy(H2S)",
-  "zeCommandListAppendMemoryCopy(D2H)",
-  "zeCommandListAppendMemoryCopy(D2D)",
-  "zeCommandListAppendMemoryCopy(D2M)",
-  "zeCommandListAppendMemoryCopy(D2S)",
-  "zeCommandListAppendMemoryCopy(M2H)",
-  "zeCommandListAppendMemoryCopy(M2D)",
-  "zeCommandListAppendMemoryCopy(M2M)",
-  "zeCommandListAppendMemoryCopy(M2S)",
-  "zeCommandListAppendMemoryCopy(S2H)",
-  "zeCommandListAppendMemoryCopy(S2D)",
-  "zeCommandListAppendMemoryCopy(S2M)",
-  "zeCommandListAppendMemoryCopy(S2S)",
-  "zeCommandListAppendMemoryCopyRegion(H2H)",
-  "zeCommandListAppendMemoryCopyRegion(H2D)",
-  "zeCommandListAppendMemoryCopyRegion(H2M)",
-  "zeCommandListAppendMemoryCopyRegion(H2S)",
-  "zeCommandListAppendMemoryCopyRegion(D2H)",
-  "zeCommandListAppendMemoryCopyRegion(D2D)",
-  "zeCommandListAppendMemoryCopyRegion(D2M)",
-  "zeCommandListAppendMemoryCopyRegion(D2S)",
-  "zeCommandListAppendMemoryCopyRegion(M2H)",
-  "zeCommandListAppendMemoryCopyRegion(M2D)",
-  "zeCommandListAppendMemoryCopyRegion(M2M)",
-  "zeCommandListAppendMemoryCopyRegion(M2S)",
-  "zeCommandListAppendMemoryCopyRegion(S2H)",
-  "zeCommandListAppendMemoryCopyRegion(S2D)",
-  "zeCommandListAppendMemoryCopyRegion(S2M)",
-  "zeCommandListAppendMemoryCopyRegion(S2S)",
-  "zeCommandListAppendMemoryCopyFromContext(H2H)",
-  "zeCommandListAppendMemoryCopyFromContext(H2D)",
-  "zeCommandListAppendMemoryCopyFromContext(H2M)",
-  "zeCommandListAppendMemoryCopyFromContext(H2S)",
-  "zeCommandListAppendMemoryCopyFromContext(D2H)",
-  "zeCommandListAppendMemoryCopyFromContext(D2D)",
-  "zeCommandListAppendMemoryCopyFromContext(D2M)",
-  "zeCommandListAppendMemoryCopyFromContext(D2S)",
-  "zeCommandListAppendMemoryCopyFromContext(M2H)",
-  "zeCommandListAppendMemoryCopyFromContext(M2D)",
-  "zeCommandListAppendMemoryCopyFromContext(M2M)",
-  "zeCommandListAppendMemoryCopyFromContext(M2S)",
-  "zeCommandListAppendMemoryCopyFromContext(S2H)",
-  "zeCommandListAppendMemoryCopyFromContext(S2D)",
-  "zeCommandListAppendMemoryCopyFromContext(S2M)",
-  "zeCommandListAppendMemoryCopyFromContext(S2S)",
-  "zeCommandListAppendImageCopy(H2H)",
-  "zeCommandListAppendImageCopy(H2D)",
-  "zeCommandListAppendImageCopy(H2M)",
-  "zeCommandListAppendImageCopy(H2S)",
-  "zeCommandListAppendImageCopy(D2H)",
-  "zeCommandListAppendImageCopy(D2D)",
-  "zeCommandListAppendImageCopy(D2M)",
-  "zeCommandListAppendImageCopy(D2S)",
-  "zeCommandListAppendImageCopy(M2H)",
-  "zeCommandListAppendImageCopy(M2D)",
-  "zeCommandListAppendImageCopy(M2M)",
-  "zeCommandListAppendImageCopy(M2S)",
-  "zeCommandListAppendImageCopy(S2H)",
-  "zeCommandListAppendImageCopy(S2D)",
-  "zeCommandListAppendImageCopy(S2M)",
-  "zeCommandListAppendImageCopy(S2S)",
-  "zeCommandListAppendImageCopyRegion(H2H)",
-  "zeCommandListAppendImageCopyRegion(H2D)",
-  "zeCommandListAppendImageCopyRegion(H2M)",
-  "zeCommandListAppendImageCopyRegion(H2S)",
-  "zeCommandListAppendImageCopyRegion(D2H)",
-  "zeCommandListAppendImageCopyRegion(D2D)",
-  "zeCommandListAppendImageCopyRegion(D2M)",
-  "zeCommandListAppendImageCopyRegion(D2S)",
-  "zeCommandListAppendImageCopyRegion(M2H)",
-  "zeCommandListAppendImageCopyRegion(M2D)",
-  "zeCommandListAppendImageCopyRegion(M2M)",
-  "zeCommandListAppendImageCopyRegion(M2S)",
-  "zeCommandListAppendImageCopyRegion(S2H)",
-  "zeCommandListAppendImageCopyRegion(S2D)",
-  "zeCommandListAppendImageCopyRegion(S2M)",
-  "zeCommandListAppendImageCopyRegion(S2S)",
-  "zeCommandListAppendImageCopyFromMemory(H2H)",
-  "zeCommandListAppendImageCopyFromMemory(H2D)",
-  "zeCommandListAppendImageCopyFromMemory(H2M)",
-  "zeCommandListAppendImageCopyFromMemory(H2S)",
-  "zeCommandListAppendImageCopyFromMemory(D2H)",
-  "zeCommandListAppendImageCopyFromMemory(D2D)",
-  "zeCommandListAppendImageCopyFromMemory(D2M)",
-  "zeCommandListAppendImageCopyFromMemory(D2S)",
-  "zeCommandListAppendImageCopyFromMemory(M2H)",
-  "zeCommandListAppendImageCopyFromMemory(M2D)",
-  "zeCommandListAppendImageCopyFromMemory(M2M)",
-  "zeCommandListAppendImageCopyFromMemory(M2S)",
-  "zeCommandListAppendImageCopyFromMemory(S2H)",
-  "zeCommandListAppendImageCopyFromMemory(S2D)",
-  "zeCommandListAppendImageCopyFromMemory(S2M)",
-  "zeCommandListAppendImageCopyFromMemory(S2S)",
-  "zeCommandListAppendImageCopyToMemory(H2H)",
-  "zeCommandListAppendImageCopyToMemory(H2D)",
-  "zeCommandListAppendImageCopyToMemory(H2M)",
-  "zeCommandListAppendImageCopyToMemory(H2S)",
-  "zeCommandListAppendImageCopyToMemory(D2H)",
-  "zeCommandListAppendImageCopyToMemory(D2D)",
-  "zeCommandListAppendImageCopyToMemory(D2M)",
-  "zeCommandListAppendImageCopyToMemory(D2S)",
-  "zeCommandListAppendImageCopyToMemory(M2H)",
-  "zeCommandListAppendImageCopyToMemory(M2D)",
-  "zeCommandListAppendImageCopyToMemory(M2M)",
-  "zeCommandListAppendImageCopyToMemory(M2S)",
-  "zeCommandListAppendImageCopyToMemory(S2H)",
-  "zeCommandListAppendImageCopyToMemory(S2D)",
-  "zeCommandListAppendImageCopyToMemory(S2M)",
-  "zeCommandListAppendImageCopyToMemory(S2S)",
-  "zeCommandListAppendMemoryFill(H)",
-  "zeCommandListAppendMemoryFill(D)",
-  "zeCommandListAppendMemoryFill(M)",
-  "zeCommandListAppendMemoryFill(S)",
-  "zeCommandListAppendBarrier", 
-  "zeCommandListAppendMemoryRangesBarrier" 
 };
 
 static std::mutex global_kernel_profiles_mutex_;
@@ -374,7 +122,6 @@ struct ZeDevice {
   uint64_t metric_timer_frequency_;
   uint64_t metric_timer_mask_;
   ze_driver_handle_t driver_;
-  ze_context_handle_t context_;
   zet_metric_group_handle_t metric_group_;
   int32_t id_;
   int32_t parent_id_;
@@ -389,7 +136,6 @@ static std::map<ze_device_handle_t, ZeDevice> *devices_;
 
 struct ZeCommandList {
   ze_command_list_handle_t cmdlist_;
-  ze_context_handle_t context_;
   ze_device_handle_t device_;
   uint64_t host_time_origin_;	// in ns
   uint64_t device_timer_frequency_;
@@ -461,17 +207,6 @@ class ZeCollector {
       PTI_ASSERT(status == ZE_RESULT_SUCCESS);
     }
 
-    if (options_.metric_query) {
-      for (auto it = metric_activations_.begin(); it != metric_activations_.end(); it++) {
-        zetContextActivateMetricGroups(it->first, it->second, 0, nullptr);
-      }
-      metric_activations_.clear();
-      for (auto& context : metric_contexts_) {
-        zeContextDestroy(context);
-      }
-      metric_contexts_.clear();
-    }
-
     DumpKernelProfiles();
   }
 
@@ -487,8 +222,7 @@ class ZeCollector {
       CollectorOptions options,
       std::string& data_dir_name)
       : correlator_(correlator),
-        options_(options),
-        event_cache_(ZE_EVENT_POOL_FLAG_KERNEL_TIMESTAMP) {
+        options_(options) {
     data_dir_name_ = data_dir_name;
     EnumerateAndSetupDevices();
     InitializeKernelCommandProperties();
@@ -508,25 +242,6 @@ class ZeCollector {
       kernel_command_properties_ = new std::map<uint64_t, ZeKernelCommandProperties>;
       UniMemory::ExitIfOutOfMemory((void *)(kernel_command_properties_));
     }
-
-    for (uint32_t i = 0; i <= uint32_t(ZeDeviceCommandHandle::LastCommand); i++) {
-      ZeKernelCommandProperties desc;
-      
-      desc.name_ = device_command_names[i];
-      desc.id_ = UniKernelId::GetKernelId();
-      if (i <= uint32_t(ZeDeviceCommandHandle::Barrier)) {
-        desc.type_ = KERNEL_COMMAND_TYPE_MEMORY;
-      }
-      else {
-        desc.type_ = KERNEL_COMMAND_TYPE_COMMAND;
-      }
-      
-      ZeKernelCommandProperties desc2;
-      desc2 = desc;
-
-      active_command_properties_->insert({uint64_t(i), std::move(desc)});
-      kernel_command_properties_->insert({desc2.id_, std::move(desc2)});
-    }
     kernel_command_properties_mutex_.unlock();
   }
 
@@ -543,18 +258,9 @@ class ZeCollector {
     if (num_drivers > 0) {
       int32_t did = 0;
       std::vector<ze_driver_handle_t> drivers(num_drivers);
-      std::vector<ze_context_handle_t> contexts;
       status = zeDriverGet(&num_drivers, drivers.data());
       PTI_ASSERT(status == ZE_RESULT_SUCCESS);
       for (auto driver : drivers) {
-        ze_context_handle_t context = nullptr;
-        if (options_.metric_query) {
-          ze_context_desc_t cdesc = {ZE_STRUCTURE_TYPE_CONTEXT_DESC, nullptr, 0};
-
-          status = zeContextCreate(driver, &cdesc, &context);
-          PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-          metric_contexts_.push_back(context);
-        }
 
         uint32_t num_devices = 0;
         status = zeDeviceGet(driver, &num_devices, nullptr);
@@ -582,7 +288,6 @@ class ZeCollector {
             desc.pci_properties_ = pci_device_properties;
 
             desc.driver_ = driver;
-            desc.context_ = context;
 
             uint32_t num_sub_devices = 0;
             status = zeDeviceGetSubDevices(device, &num_sub_devices, nullptr);
@@ -590,39 +295,8 @@ class ZeCollector {
 
             desc.num_subdevices_ = num_sub_devices;
 
-            if (options_.metric_query) {
-              uint32_t num_groups = 0;
-              zet_metric_group_handle_t group = nullptr;
-              status = zetMetricGroupGet(device, &num_groups, nullptr);
-              PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-              if (num_groups > 0) {
-                std::vector<zet_metric_group_handle_t> groups(num_groups, nullptr);
-                status = zetMetricGroupGet(device, &num_groups, groups.data());
-                PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-
-                for (uint32_t k = 0; k < num_groups; ++k) {
-                  zet_metric_group_properties_t group_props{};
-                  group_props.stype = ZET_STRUCTURE_TYPE_METRIC_GROUP_PROPERTIES;
-                  status = zetMetricGroupGetProperties(groups[k], &group_props);
-                  PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-
-                  
-                  if ((strcmp(group_props.name, utils::GetEnv("UNITRACE_MetricGroup").c_str()) == 0) && (group_props.samplingType & ZET_METRIC_GROUP_SAMPLING_TYPE_FLAG_EVENT_BASED)) {
-                    group = groups[k];
-                    break;
-                  }
-                }
-              }
-
-              status = zetContextActivateMetricGroups(context, device, 1, &group);
-              PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-              metric_activations_.insert({context, device});
-
-              desc.metric_group_ = group;
-            }
-            else {
-              desc.metric_group_ = nullptr;
-            }
+            desc.metric_group_ = nullptr;
+            
 
             uint64_t host_time;
             uint64_t ticks;
@@ -667,8 +341,7 @@ class ZeCollector {
                 sub_desc.host_time_origin_ = host_time;
   
                 sub_desc.driver_ = driver;
-                sub_desc.context_ = context;
-            
+
                 sub_desc.metric_group_ = nullptr;
 
                 devices_->insert({sub_devices[j], std::move(sub_desc)});
@@ -896,22 +569,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
   zel_tracer_handle_t tracer_ = nullptr;
   CollectorOptions options_;
   Correlator* correlator_ = nullptr;
-
-  mutable std::shared_mutex images_mutex_;
-  std::map<ze_image_handle_t, size_t> images_;
-
-  ZeEventCache event_cache_;
-
-  mutable std::shared_mutex command_lists_mutex_;
-  std::map<ze_command_list_handle_t, ZeCommandList *> command_lists_;
-
-  std::set<std::pair<ze_context_handle_t, ze_device_handle_t>> metric_activations_;
-
-  std::vector<ze_context_handle_t> metric_contexts_;
-
-  constexpr static size_t kCallsLength = 12;
-  constexpr static size_t kTimeLength = 20;
-
   std::string data_dir_name_;
 };
 
