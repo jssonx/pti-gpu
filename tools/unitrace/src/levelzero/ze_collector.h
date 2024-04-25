@@ -97,7 +97,6 @@ struct ZeKernelCommandProperties {
 // these will not go away when ZeCollector is destructed
 static std::shared_mutex kernel_command_properties_mutex_;
 static std::map<uint64_t, ZeKernelCommandProperties> *kernel_command_properties_ = nullptr;
-static std::map<ze_kernel_handle_t, ZeKernelCommandProperties> *active_kernel_properties_ = nullptr;
 
 struct ZeModule {
   ze_device_handle_t device_;
@@ -205,10 +204,6 @@ class ZeCollector {
 
   void InitializeKernelCommandProperties(void) {
     kernel_command_properties_mutex_.lock();
-    if (active_kernel_properties_ == nullptr) {
-      active_kernel_properties_ = new std::map<ze_kernel_handle_t, ZeKernelCommandProperties>;
-      UniMemory::ExitIfOutOfMemory((void *)(active_kernel_properties_));
-    }
     if (kernel_command_properties_ == nullptr) {
       kernel_command_properties_ = new std::map<uint64_t, ZeKernelCommandProperties>;
       UniMemory::ExitIfOutOfMemory((void *)(kernel_command_properties_));
@@ -453,11 +448,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       }
       kernel_command_properties_mutex_.lock();
 
-      auto it = active_kernel_properties_->find(kernel);
-      if (it != active_kernel_properties_->end()) {
-        active_kernel_properties_->erase(it);
-      }
-
       ZeKernelCommandProperties desc;
 
       desc.type_ = KERNEL_COMMAND_TYPE_COMPUTE;
@@ -515,18 +505,8 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       desc.size_ = binary_size;
 
       ZeKernelCommandProperties desc2 = desc;
-      active_kernel_properties_->insert({kernel, std::move(desc)});
       kernel_command_properties_->insert({desc2.id_, std::move(desc2)});
 
-      kernel_command_properties_mutex_.unlock();
-    }
-  }
-
-  static void OnExitKernelDestroy(ze_kernel_destroy_params_t* params, ze_result_t result, void* global_data, void** instance_data) {
-    if (result == ZE_RESULT_SUCCESS) {
-      ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-      kernel_command_properties_mutex_.lock();
-      active_kernel_properties_->erase(*(params->phKernel));
       kernel_command_properties_mutex_.unlock();
     }
   }
