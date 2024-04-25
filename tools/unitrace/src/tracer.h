@@ -41,12 +41,6 @@ class UniTracer {
       collector_options.device_timing = tracer->CheckOption(TRACE_DEVICE_TIMING);
     }
 
-    if (tracer->CheckOption(TRACE_HOST_TIMING)) {
-
-      collector_options.api_tracing = true;
-      collector_options.host_timing = tracer->CheckOption(TRACE_HOST_TIMING);
-    }
-
     if (tracer->CheckOption(TRACE_METRIC_STREAM)) {
       collector_options.metric_stream = true;
       if (utils::GetEnv("UNITRACE_MetricGroup") == "EuStallSampling") {

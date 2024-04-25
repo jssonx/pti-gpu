@@ -66,9 +66,6 @@ struct ZeCommand {
   uint64_t append_time_ = 0;
   uint64_t submit_time_ = 0;		//in ns
   uint64_t submit_time_device_ = 0;	//in ticks
-  ze_command_list_handle_t command_list_ = nullptr;
-  ze_command_queue_handle_t queue_ = nullptr;
-  ze_fence_handle_t fence_;
   uint64_t tid_;
   uint64_t mem_size_;	// memory copy/fill size
   uint32_t engine_ordinal_;
@@ -101,7 +98,6 @@ struct ZeKernelCommandProperties {
 static std::shared_mutex kernel_command_properties_mutex_;
 static std::map<uint64_t, ZeKernelCommandProperties> *kernel_command_properties_ = nullptr;
 static std::map<ze_kernel_handle_t, ZeKernelCommandProperties> *active_kernel_properties_ = nullptr;
-static std::map<uint64_t, ZeKernelCommandProperties> *active_command_properties_ = nullptr;
 
 struct ZeModule {
   ze_device_handle_t device_;
@@ -132,21 +128,6 @@ struct ZeDevice {
 // these will no go away when ZeCollector is destructed
 static std::shared_mutex devices_mutex_;
 static std::map<ze_device_handle_t, ZeDevice> *devices_;
-
-struct ZeCommandList {
-  ze_command_list_handle_t cmdlist_;
-  ze_device_handle_t device_;
-  uint64_t host_time_origin_;	// in ns
-  uint64_t device_timer_frequency_;
-  uint64_t device_timer_mask_;
-  uint64_t metric_timer_frequency_;
-  uint64_t metric_timer_mask_;
-  uint32_t engine_ordinal_;	// valid if immediate command list
-  uint32_t engine_index_;	// valid if immediate command list
-  bool immediate_;
-  bool implicit_scaling_;
-  std::vector<ZeCommand *> commands_;	// if non-immediate command list
-};
 
 ze_result_t (*zexKernelGetBaseAddress)(ze_kernel_handle_t hKernel, uint64_t *baseAddress) = nullptr; // TODO
 
@@ -224,10 +205,6 @@ class ZeCollector {
 
   void InitializeKernelCommandProperties(void) { // TODO
     kernel_command_properties_mutex_.lock();
-    if (active_command_properties_ == nullptr) {
-      active_command_properties_ = new std::map<uint64_t, ZeKernelCommandProperties>;
-      UniMemory::ExitIfOutOfMemory((void *)(active_command_properties_));
-    }
     if (active_kernel_properties_ == nullptr) {
       active_kernel_properties_ = new std::map<ze_kernel_handle_t, ZeKernelCommandProperties>;
       UniMemory::ExitIfOutOfMemory((void *)(active_kernel_properties_));
@@ -556,8 +533,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
   }
 
   #include <tracing.gen> // Auto-generated callbacks
-
-  void CollectHostFunctionTimeStats(uint32_t id, uint64_t time) {}
 
  private: // Data
   zel_tracer_handle_t tracer_ = nullptr;
