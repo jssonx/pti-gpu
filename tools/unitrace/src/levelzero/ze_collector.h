@@ -999,7 +999,7 @@ typedef void (*OnZeKernelFinishCallback)(uint64_t kid, uint64_t tid, uint64_t st
 
 ze_result_t (*zexKernelGetBaseAddress)(ze_kernel_handle_t hKernel, uint64_t *baseAddress) = nullptr;
 
-inline std::string GetZeKernelCommandName(uint64_t id, const ze_group_count_t& group_count, size_t size, bool detailed = true) {
+inline std::string GetZeKernelCommandName(uint64_t id, const ze_group_count_t& group_count, size_t size, bool detailed = true) { // TODO
   std::string str;
   kernel_command_properties_mutex_.lock_shared();
   auto it = kernel_command_properties_->find(id);
@@ -1162,114 +1162,6 @@ class ZeCollector {
     global_device_time_stats_mutex_.unlock();
 
     return total_time;
-  }
-
-  void PrintKernelsTable() const {
-    uint64_t total_time = 0;
-    std::vector<std::string> knames;
-    size_t max_name_size = 0;
-    global_device_time_stats_mutex_.lock();
-
-    AggregateDeviceTimeStats();
-
-    std::set<std::pair<ZeKernelCommandNameKey, ZeKernelCommandTime>, utils::Comparator> sorted_list(
-        global_device_time_stats_->begin(), global_device_time_stats_->end());
-
-    for (auto& it : sorted_list) {
-      total_time += it.second.execute_time_;
-      std::string kname;
-      if (it.first.tile_ >= 0) {
-        kname = "Tile #" + std::to_string(it.first.tile_) + ": " + GetZeKernelCommandName(it.first.kernel_command_id_, it.first.group_count_, it.first.mem_size_, options_.verbose);
-      }
-      else {
-        kname = GetZeKernelCommandName(it.first.kernel_command_id_, it.first.group_count_, it.first.mem_size_, options_.verbose);
-      }
-      if (kname.size() > max_name_size) {
-        max_name_size = kname.size();
-      }
-      knames.push_back(kname);
-    }
-
-    if (total_time != 0) {
-      // sizeof("Kernel") is 7, not 6 
-      std::string str(std::max(int(max_name_size - sizeof("Kernel") + 1), 0), ' ');
-      str += "Kernel, " +
-        std::string(std::max(int(kCallsLength - sizeof("Calls") + 1), 0), ' ') + "Calls, " +
-        std::string(std::max(int(kTimeLength - sizeof("Time (ns)") + 1), 0), ' ') + "Time (ns), " +
-        "    Time (%), " +
-        std::string(std::max(int(kTimeLength - sizeof("Average (ns)") + 1), 0), ' ') + "Average (ns), " +
-        std::string(std::max(int(kTimeLength - sizeof("Min (ns)") + 1), 0), ' ') + "Min (ns), " +
-        std::string(std::max(int(kTimeLength - sizeof("Max (ns)") + 1), 0), ' ') + "Max (ns)\n"; 
-        
-      correlator_->Log(str);
-
-      int i = 0;
-      for (auto& it : sorted_list) {
-        uint64_t call_count = it.second.call_count_;
-        uint64_t time = it.second.execute_time_;
-        uint64_t avg_time = time / call_count;
-        uint64_t min_time = it.second.min_time_;
-        uint64_t max_time = it.second.max_time_;
-        float percent_time = (100.0f * time / total_time);
-        
-        str = std::string(std::max(int(max_name_size - knames[i].length()), 0), ' ');
-        str += knames[i] + ", " +
-          std::string(std::max(int(kCallsLength - std::to_string(call_count).length()), 0), ' ') +  std::to_string(call_count) + ", " +
-          std::string(std::max(int(kTimeLength - std::to_string(time).length()), 0), ' ') + std::to_string(time) + ", " +
-          std::string(std::max(int(sizeof("   Time (%)") - std::to_string(percent_time).length()), 0), ' ') +
-          std::to_string(percent_time) + ", " +
-          std::string(std::max(int(kTimeLength - std::to_string(avg_time).length()), 0), ' ') + std::to_string(avg_time) + ", " +
-          std::string(std::max(int(kTimeLength - std::to_string(min_time).length()), 0), ' ') + std::to_string(min_time) + ", " +
-          std::string(std::max(int(kTimeLength - std::to_string(max_time).length()), 0), ' ') + std::to_string(max_time) + "\n";
-        correlator_->Log(str);
-        i++;
-      }
-  
-      
-      str = "\n\n=== Kernel Properties ===\n\n";
-      str = str + std::string(std::max(int(max_name_size - sizeof("Kernel") + 1), 0), ' ') +
-        "Kernel, Compiled, Number of Arguments, SLM Per Work Group, Private Memory Per Thread, Spill Memory Per Thread, Register File Size Per Thread\n";
-      correlator_->Log(str);
-  
-      i = -1; 
-      for (auto& it : sorted_list) {
-        ++i;
-        auto kit = kernel_command_properties_->find(it.first.kernel_command_id_);
-        if (kit == kernel_command_properties_->end()) {
-          continue;
-        }
-        if (kit->second.type_ != KERNEL_COMMAND_TYPE_COMPUTE) {
-          continue;
-        }
-        
-        str = std::string(std::max(int(max_name_size - knames[i].length()), 0), ' ');
-        str = str + knames[i] + "," +
-          std::string(sizeof("Compiled") - sizeof("AOT") + 1, ' ') +
-          (kit->second.aot_ ? "AOT" : "JIT") + "," +
-          std::string(std::max(int(sizeof("Number of Arguments") - std::to_string(kit->second.nargs_).length()), 0), ' ') +
-          std::to_string(kit->second.nargs_) + "," +
-          std::string(std::max(int(sizeof("SLM Per Work Group") - std::to_string(kit->second.slmsize_).length()), 0), ' ') + 
-          std::to_string(kit->second.slmsize_) + "," +
-          std::string(std::max(int(sizeof("Private Memory Per Thread") - std::to_string(kit->second.private_mem_size_).length()), 0), ' ') + 
-          std::to_string(kit->second.private_mem_size_) + "," +
-          std::string(std::max(int(sizeof("Spill Memory Per Thread") - std::to_string(kit->second.spill_mem_size_).length()), 0), ' ') +
-          std::to_string(kit->second.spill_mem_size_) + ",";
-        if (kit->second.regsize_) {
-          // report size if size is available
-          str += std::string(std::max(int(sizeof("Register File Size Per Thread") - std::to_string(kit->second.regsize_).length()), 0), ' ') +
-                 std::to_string(kit->second.regsize_) + "\n";
-          }
-        else {
-          // report "unknown" otherwise
-          str += std::string(sizeof("Register File Size Per Thread") - sizeof("unknown") + 1, ' ') +
-                 "unknown\n";
-        }
-        correlator_->Log(str);
-      }
-    }
-
-    global_device_time_stats_mutex_.unlock();
-
   }
 
   void PrintSubmissionTable() const {
@@ -1516,7 +1408,7 @@ class ZeCollector {
     InitializeKernelCommandProperties();
   }
 
-  void InitializeKernelCommandProperties(void) {
+  void InitializeKernelCommandProperties(void) { // TODO
     kernel_command_properties_mutex_.lock();
     if (active_command_properties_ == nullptr) {
       active_command_properties_ = new std::map<uint64_t, ZeKernelCommandProperties>;
@@ -1825,7 +1717,7 @@ class ZeCollector {
     }
   }
 
-  void DumpKernelProfiles(void) {
+  void DumpKernelProfiles(void) { // TODO
     ze_device_handle_t device = nullptr;
     int did = -1;
     zet_metric_group_handle_t group = nullptr;
@@ -1879,138 +1771,6 @@ class ZeCollector {
 
       kernel_command_properties_mutex_.unlock();
     }
-    
-    const std::lock_guard<std::mutex> lock(global_kernel_profiles_mutex_);
-    if (global_kernel_profiles_.size() == 0) {
-      return;
-    }
-    
-    if (options_.metric_stream) {
-      devices_mutex_.lock_shared();
-      std::map<int32_t, std::vector<ZeKernelProfileRecord *>> device_kprofiles; // kernel profiles by device;
-      for (auto it = global_kernel_profiles_.begin(); it != global_kernel_profiles_.end(); it++) {
-        int32_t device_id = -1;
-        auto dit = devices_->find(it->second.device_);
-        if (dit != devices_->end()) {
-          device_id = dit->second.id_;
-        }
-        if (device_id == -1) {
-          continue;
-        }
-        auto dpit = device_kprofiles.find(device_id);
-        if (dpit == device_kprofiles.end()) {
-          std::vector<ZeKernelProfileRecord *> kprofiles;
-          kprofiles.push_back(&(it->second));
-          device_kprofiles.insert({device_id, std::move(kprofiles)});
-        }
-        else {
-          dpit->second.push_back(&(it->second));
-        }
-      }
-      devices_mutex_.unlock_shared();
-
-      for (auto& profiles : device_kprofiles) {
-        std::ofstream ouf;
-        // kernel instance time file path: <data_dir>/.ktime.<device_id>.<pid>.txt
-        std::string fpath = data_dir_name_ + "/.ktime."  + std::to_string(profiles.first) + "." + std::to_string(utils::GetPid()) + ".txt";
-        ouf = std::ofstream(fpath, std::ios::out | std::ios::trunc);
-        for (auto& prof : profiles.second) {
-          for (auto& ts : prof->timestamps_) {
-            std::string kname = GetZeKernelCommandName(prof->kernel_command_id_, prof->group_count_, prof->mem_size_);
-            ouf << ts.subdevice_id << std::endl;
-            ouf << ts.metric_start << std::endl;
-            ouf << ts.metric_end << std::endl;
-            ouf << kname << std::endl;
-          }
-        }
-        ouf.close();
-      }
-
-      return;
-    }
-
-    if (!options_.metric_query) {
-      return;
-    }
-
-    // metric query
-    correlator_->Log("\n== Kernel Metrics ==\n\n");
-
-    for (auto it = global_kernel_profiles_.begin(); it != global_kernel_profiles_.end(); it++) {
-      if ((it->second.metrics_ == nullptr) || it->second.metrics_->empty()) {
-        continue;
-      }
-
-      std::string kname = GetZeKernelCommandName(it->second.kernel_command_id_, it->second.group_count_, it->second.mem_size_);
-
-      if (device != it->second.device_) {
-        device = it->second.device_;
-        auto it2 = devices_->find(it->second.device_);
-        
-        if (it2 == devices_->end()) {
-          // should never get here
-          continue;
-        }
-
-        did = it2->second.id_;
-        group = it2->second.metric_group_;
-        metric_names = GetMetricNames(it2->second.metric_group_);
-        PTI_ASSERT(!metric_names.empty());
-      }
-
-      uint32_t num_samples = 0;
-      uint32_t num_metrics = 0;
-      ze_result_t status = zetMetricGroupCalculateMultipleMetricValuesExp(
-        group, ZET_METRIC_GROUP_CALCULATION_TYPE_METRIC_VALUES,
-        it->second.metrics_->size(), it->second.metrics_->data(), &num_samples, &num_metrics,
-        nullptr, nullptr);
-
-      if ((status == ZE_RESULT_SUCCESS) && (num_samples > 0) && (num_metrics > 0)) {
-        std::vector<uint32_t> samples(num_samples);
-        std::vector<zet_typed_value_t> metrics(num_metrics);
-
-        status = zetMetricGroupCalculateMultipleMetricValuesExp(
-          group, ZET_METRIC_GROUP_CALCULATION_TYPE_METRIC_VALUES,
-          it->second.metrics_->size(), it->second.metrics_->data(), &num_samples, &num_metrics,
-          samples.data(), metrics.data());
-
-        if (status == ZE_RESULT_SUCCESS) {
-          std::string header("\nKernel,Device,SubDeviceId,");
-          for (auto& metric : metric_names) {
-            header += metric + ",";
-          }
-          header += "\n";
-          correlator_->Log(header);
-    
-          std::string str;
-          for (uint32_t i = 0; i < num_samples; ++i) {
-            str = kname + ",";
-            str += std::to_string(did) + ",";
-            str += std::to_string(i) + ",";
-    
-            uint32_t size = samples[i];
-            PTI_ASSERT(size == metric_names.size());
-    
-            const zet_typed_value_t *value = metrics.data() + i * size;
-            for (int j = 0; j < size; ++j) {
-              str += PrintTypedValue(value[j]);
-              str += ",";
-            }
-            str += "\n";
-          }
-    
-          correlator_->Log(str);
-        }
-        else {
-          std::cerr << "[WARNING] Not able to calculate metrics" << std::endl;
-        }
-      }
-      else {
-        std::cerr << "[WARNING] Not able to calculate metrics" << std::endl;
-      }
-    }
-
-    global_kernel_profiles_.clear();
   }
 
   void ProcessCommandsSubmittedOnSignaledEvent(ze_event_handle_t event, std::vector<uint64_t> *kids) {
@@ -2674,575 +2434,9 @@ class ZeCollector {
     return query;
   }
 
-  void AppendLaunchKernel(
-    ZeCollector *collector, 
-    ze_kernel_handle_t kernel,
-    const ze_group_count_t *group_count,
-    ze_event_handle_t& event_to_signal,
-    zet_metric_query_handle_t& query,
-    ze_command_list_handle_t command_list,
-    std::vector<uint64_t> *kids) {
 
-    uint64_t kernel_id;
-    ZeKernelGroupSize group_size;
-    bool found = false;
 
-    if (local_device_submissions_.IsFinalized()) {
-      return;
-    }
 
-    kernel_command_properties_mutex_.lock_shared();
-    auto kit = active_kernel_properties_->find(kernel);
-    if (kit != active_kernel_properties_->end()) {
-      kernel_id = kit->second.id_;
-      group_size = kit->second.group_size_;
-      found = true;
-    }
-    kernel_command_properties_mutex_.unlock_shared();
-
-    if (!found) {
-      std::cerr << "[ERROR] Kernel (" << kernel << ") is not found." << std::endl;
-      return;
-    }
-
-    command_lists_mutex_.lock_shared();
-
-    auto it = command_lists_.find(command_list);
-
-    if (it != command_lists_.end()) {
-      ZeCommand *desc = nullptr;
-      ZeCommandMetricQuery *desc_query = nullptr;
-        
-      desc = local_device_submissions_.GetKernelCommand();
-
-      desc->type_ = KERNEL_COMMAND_TYPE_COMPUTE;
-      desc->kernel_command_id_ = kernel_id;
-      desc->group_size_ = group_size;
-      desc->group_count_ = *group_count;
-      desc->engine_ordinal_ = it->second->engine_ordinal_;
-      desc->engine_index_ = it->second->engine_index_;
-      desc->host_time_origin_ = it->second->host_time_origin_;	// in ns
-      desc->device_timer_frequency_ = it->second->device_timer_frequency_;
-      desc->device_timer_mask_ = it->second->device_timer_mask_;
-      desc->metric_timer_frequency_ = it->second->metric_timer_frequency_;
-      desc->metric_timer_mask_ = it->second->metric_timer_mask_;
-      desc->implicit_scaling_ = it->second->implicit_scaling_;
-      desc->device_ = it->second->device_;
-      ze_context_handle_t context = it->second->context_;
-
-      command_lists_mutex_.unlock_shared();
-
-      desc->mem_size_ = 0;
-      desc->event_ = event_to_signal;
-      desc->command_list_ = command_list;
-      desc->queue_ = nullptr;
-      desc->tid_ = utils::GetTid();
-
-      if (query != nullptr) {
-        desc_query = local_device_submissions_.GetCommandMetricQuery();
-
-        ze_event_handle_t metric_query_event = collector->event_cache_.GetEvent(context);
-        ze_result_t status = zetCommandListAppendMetricQueryEnd(command_list, query, metric_query_event, 0, nullptr);
-        PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-        desc_query->metric_query_event_ = metric_query_event;
-        desc_query->metric_query_ = query;
-        desc_query->device_ = it->second->device_;
-      }
-
-      uint64_t host_timestamp = ze_instance_data.timestamp_host;
-      if (it->second->immediate_) {
-        desc->immediate_ = true;
-        desc->instance_id_ = UniKernelInstanceId::GetKernelInstanceId();
-        desc->append_time_ = host_timestamp;
-        desc->submit_time_ = host_timestamp;
-        desc->submit_time_device_ = ze_instance_data.timestamp_device;	// append time and submit time are the same
-        desc->command_metric_query_ = nullptr;		// don't care metric query in case of immediate command list
-        local_device_submissions_.SubmitKernelCommand(desc);
-        kids->push_back(desc->instance_id_);
-
-        if (query != nullptr) {
-          desc_query->instance_id_ = desc->instance_id_;
-          desc_query->immediate_ = true;
-          local_device_submissions_.SubmitCommandMetricQuery(desc_query);
-        }
-      }
-      else {
-        desc->append_time_ = host_timestamp;
-        desc->immediate_ = false;
-        desc->command_metric_query_ = desc_query;	// need metric query upon submission
-        command_lists_mutex_.lock();
-        it->second->commands_.push_back(desc);
-        if (query != nullptr) {
-          desc_query->immediate_ = false;
-          it->second->metric_queries_.push_back(desc_query);
-        }
-        command_lists_mutex_.unlock();
-      }
-    }
-    else {
-      command_lists_mutex_.unlock_shared();
-    }
-  }
-
-  void AppendMemoryCommand(
-    ZeCollector *collector, 
-    ZeDeviceCommandHandle handle,
-    size_t size,
-    const void* src,
-    const void* dst,
-    ze_event_handle_t& event_to_signal,
-    zet_metric_query_handle_t& query,
-    ze_command_list_handle_t command_list,
-    std::vector<uint64_t> *kids) {
-
-    if (local_device_submissions_.IsFinalized()) {
-      return;
-    }
-
-    ze_context_handle_t context = nullptr;
-    command_lists_mutex_.lock_shared();
-    auto it = command_lists_.find(command_list);
-    if (it != command_lists_.end()) {
-      context = it->second->context_;
-    }
-
-    int mtype = GetMemoryTransferType(context, src, context, dst);
-    if (mtype != -1) {
-      handle = ZeDeviceCommandHandle(int(handle) + mtype);
-    }
-      
-    uint64_t command_id;
-    bool found = false;
-
-    kernel_command_properties_mutex_.lock_shared();
-    auto kit = active_command_properties_->find(handle);
-    if (kit != active_command_properties_->end()) {
-      command_id = kit->second.id_;
-      found = true;
-    }
-    kernel_command_properties_mutex_.unlock_shared();
-
-    if (found && (it != command_lists_.end())) {
-      ZeCommand *desc = nullptr;
-      ZeCommandMetricQuery *desc_query = nullptr;
-      
-      desc = local_device_submissions_.GetKernelCommand();
-
-      desc->type_ = KERNEL_COMMAND_TYPE_MEMORY;
-      desc->kernel_command_id_ = command_id;;
-      desc->engine_ordinal_ = it->second->engine_ordinal_;
-      desc->engine_index_ = it->second->engine_index_;
-      desc->host_time_origin_ = it->second->host_time_origin_;	// in ns
-      desc->device_timer_frequency_ = it->second->device_timer_frequency_;
-      desc->device_timer_mask_ = it->second->device_timer_mask_;
-      desc->metric_timer_frequency_ = it->second->metric_timer_frequency_;
-      desc->metric_timer_mask_ = it->second->metric_timer_mask_;
-      desc->event_ = event_to_signal;
-      desc->device_ = it->second->device_;
-      ze_context_handle_t context = it->second->context_;
-      command_lists_mutex_.unlock_shared();
-
-      desc->group_count_ = {0, 0, 0};
-      desc->command_list_ = command_list;
-      desc->queue_ = nullptr;
-      desc->mem_size_ = size;
-      desc->tid_ = utils::GetTid();
-
-      if (query != nullptr) {
-        desc_query = local_device_submissions_.GetCommandMetricQuery();
-
-        ze_event_handle_t metric_query_event = collector->event_cache_.GetEvent(context);
-        ze_result_t status = zetCommandListAppendMetricQueryEnd(command_list, query, metric_query_event, 0, nullptr);
-        PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-        desc_query->metric_query_event_ = metric_query_event;
-        desc_query->metric_query_ = query;
-        desc_query->device_ = it->second->device_;
-      }
-
-      uint64_t host_timestamp = ze_instance_data.timestamp_host;
-      if (it->second->immediate_) {
-        desc->immediate_ = true;
-        desc->instance_id_ = UniKernelInstanceId::GetKernelInstanceId();
-        desc->append_time_ = host_timestamp;
-        desc->submit_time_ = host_timestamp;
-        desc->submit_time_device_ = ze_instance_data.timestamp_device;	// append time and submit time are the same
-        desc->command_metric_query_ = nullptr;	// do not care metric query in case of immediate command list
-
-        local_device_submissions_.SubmitKernelCommand(desc);
-
-        kids->push_back(desc->instance_id_);
-
-        if (query != nullptr) {
-          desc_query->instance_id_ = desc->instance_id_;
-          desc_query->immediate_ = true;
-          local_device_submissions_.SubmitCommandMetricQuery(desc_query);
-        }
-      }
-      else {
-        desc->append_time_ = host_timestamp;
-        desc->immediate_ = false;
-        desc->command_metric_query_ = desc_query;
-        command_lists_mutex_.lock();
-        it->second->commands_.push_back(desc);
-        if (query != nullptr) {
-          desc_query->immediate_ = false;
-          it->second->metric_queries_.push_back(desc_query);
-        }
-        command_lists_mutex_.unlock();
-      }
-    }
-    else {
-      command_lists_mutex_.unlock_shared();
-    }
-  }
-
-  void AppendMemoryCommandContext(
-      ZeCollector *collector, 
-      ZeDeviceCommandHandle handle,
-      size_t size,
-      ze_context_handle_t src_context,
-      const void* src,
-      ze_context_handle_t dst_context,
-      const void* dst,
-      ze_event_handle_t& event_to_signal,
-      zet_metric_query_handle_t& query,
-      ze_command_list_handle_t command_list,
-      std::vector<uint64_t> *kids) {
-
-    if (local_device_submissions_.IsFinalized()) {
-      return;
-    }
-
-    command_lists_mutex_.lock_shared();
-    auto it = command_lists_.find(command_list);
-
-    int mtype = GetMemoryTransferType(src_context, src, dst_context, dst);
-    if (mtype != -1) {
-      handle = ZeDeviceCommandHandle(int(handle) + mtype);
-    }
-      
-    uint64_t command_id;
-    bool found = false;
-
-    kernel_command_properties_mutex_.lock_shared();
-    auto kit = active_command_properties_->find(handle);
-    if (kit != active_command_properties_->end()) {
-      command_id = kit->second.id_;
-      found = true;
-    }
-    kernel_command_properties_mutex_.unlock_shared();
-
-    if (found && (it != command_lists_.end())) {
-      ZeCommand *desc = nullptr;
-      ZeCommandMetricQuery *desc_query = nullptr;
-        
-      desc = local_device_submissions_.GetKernelCommand();
-
-      desc->type_ = KERNEL_COMMAND_TYPE_MEMORY;
-      desc->kernel_command_id_ = command_id;;
-      desc->engine_ordinal_ = it->second->engine_ordinal_;
-      desc->engine_index_ = it->second->engine_index_;
-      desc->host_time_origin_ = it->second->host_time_origin_;	// in ns
-      desc->device_timer_frequency_ = it->second->device_timer_frequency_;
-      desc->device_timer_mask_ = it->second->device_timer_mask_;
-      desc->metric_timer_frequency_ = it->second->metric_timer_frequency_;
-      desc->metric_timer_mask_ = it->second->metric_timer_mask_;
-      desc->event_ = event_to_signal;
-      desc->device_ = it->second->device_;
-      ze_context_handle_t context = it->second->context_;
-      command_lists_mutex_.unlock_shared();
-
-      desc->group_count_ = {0, 0, 0};
-      desc->command_list_ = command_list;
-      desc->queue_ = nullptr;
-      desc->mem_size_ = size;
-      desc->tid_ = utils::GetTid();
-      if (query != nullptr) {
-        desc_query = local_device_submissions_.GetCommandMetricQuery();
-
-        ze_event_handle_t metric_query_event = collector->event_cache_.GetEvent(context);
-        ze_result_t status = zetCommandListAppendMetricQueryEnd(command_list, query, metric_query_event, 0, nullptr);
-        PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-        desc_query->metric_query_ = query;
-        desc_query->metric_query_event_ = metric_query_event;
-      }
-
-      uint64_t host_timestamp = ze_instance_data.timestamp_host;
-      if (it->second->immediate_) {
-        desc->immediate_ = true;
-        desc->instance_id_ = UniKernelInstanceId::GetKernelInstanceId();
-        desc->append_time_ = host_timestamp;
-        desc->submit_time_ = host_timestamp;
-        desc->submit_time_device_ = ze_instance_data.timestamp_device;	// append time and submit time are the same
-        desc->command_metric_query_ = nullptr;
-
-        local_device_submissions_.SubmitKernelCommand(desc);
-
-        kids->push_back(desc->instance_id_);
-        if (query != nullptr) {
-          desc_query->instance_id_ = desc->instance_id_;
-          desc_query->immediate_ = true;
-          local_device_submissions_.SubmitCommandMetricQuery(desc_query);
-        }
-      }
-      else {
-        desc->append_time_ = host_timestamp;
-        desc->immediate_ = false;
-        desc->command_metric_query_ = desc_query;
-        command_lists_mutex_.lock();
-        it->second->commands_.push_back(desc);
-        if (query != nullptr) {
-          desc_query->immediate_ = false;
-          it->second->metric_queries_.push_back(desc_query);
-        }
-        command_lists_mutex_.unlock();
-      }
-    }
-    else {
-      command_lists_mutex_.unlock_shared();
-    }
-  }
-
-  void AppendImageMemoryCopyCommand(
-    ZeCollector *collector, 
-    ZeDeviceCommandHandle handle,
-    ze_image_handle_t image,
-    const void* src,
-    const void* dst,
-    ze_event_handle_t& event_to_signal,
-    zet_metric_query_handle_t& query,
-    ze_command_list_handle_t command_list,
-    std::vector<uint64_t> *kids) {
-
-    if (local_device_submissions_.IsFinalized()) {
-      return;
-    }
-
-    ze_context_handle_t context = nullptr;
-    command_lists_mutex_.lock_shared();
-    auto it = command_lists_.find(command_list);
-    if (it != command_lists_.end()) {
-      context = it->second->context_;
-    }
-
-    int mtype = GetMemoryTransferType(context, src, context, dst);
-    if (mtype != -1) {
-      handle = ZeDeviceCommandHandle(int(handle) + mtype);
-    }
-      
-    size_t size = GetImageSize(image);
-
-    uint64_t command_id;
-    bool found = false;
-
-    kernel_command_properties_mutex_.lock_shared();
-    auto kit = active_command_properties_->find(handle);
-    if (kit != active_command_properties_->end()) {
-      command_id = kit->second.id_;
-      found = true;
-    }
-    kernel_command_properties_mutex_.unlock_shared();
-
-    if (found && (it != command_lists_.end())) {
-      ZeCommand *desc = nullptr;
-      ZeCommandMetricQuery *desc_query = nullptr;
-        
-      desc = local_device_submissions_.GetKernelCommand();
-
-      desc->type_ = KERNEL_COMMAND_TYPE_MEMORY;
-      desc->kernel_command_id_ = command_id;;
-      desc->engine_ordinal_ = it->second->engine_ordinal_;
-      desc->engine_index_ = it->second->engine_index_;
-      desc->host_time_origin_ = it->second->host_time_origin_;	// in ns
-      desc->device_timer_frequency_ = it->second->device_timer_frequency_;
-      desc->device_timer_mask_ = it->second->device_timer_mask_;
-      desc->metric_timer_frequency_ = it->second->metric_timer_frequency_;
-      desc->metric_timer_mask_ = it->second->metric_timer_mask_;
-      desc->device_ = it->second->device_;
-      ze_context_handle_t context = it->second->context_;
-      command_lists_mutex_.unlock_shared();
-
-      desc->group_count_ = {0, 0, 0};
-      desc->event_ = event_to_signal;
-      desc->command_list_ = command_list;
-      desc->mem_size_ = size;
-      desc->queue_ = nullptr;
-      desc->tid_ = utils::GetTid();
-      if (query != nullptr) {
-        desc_query = local_device_submissions_.GetCommandMetricQuery();
-
-        ze_event_handle_t metric_query_event = collector->event_cache_.GetEvent(context);
-        ze_result_t status = zetCommandListAppendMetricQueryEnd(command_list, query, metric_query_event, 0, nullptr);
-        PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-        desc_query->metric_query_ = query;
-        desc_query->metric_query_event_ = metric_query_event;
-      }
-
-      uint64_t host_timestamp = ze_instance_data.timestamp_host;
-      if (it->second->immediate_) {
-        desc->immediate_ = true;
-        desc->instance_id_ = UniKernelInstanceId::GetKernelInstanceId();
-        desc->append_time_ = host_timestamp;
-        desc->submit_time_ = host_timestamp;
-        desc->submit_time_device_ = ze_instance_data.timestamp_device;	// append time and submit time are the same
-        desc->command_metric_query_ = nullptr;
-
-        local_device_submissions_.SubmitKernelCommand(desc);
-
-        kids->push_back(desc->instance_id_);
-        if (query != nullptr) {
-          desc_query->instance_id_ = desc->instance_id_;
-          desc_query->immediate_ = true;
-          local_device_submissions_.SubmitCommandMetricQuery(desc_query);
-        }
-      }
-      else {
-        desc->append_time_ = host_timestamp;
-        desc->immediate_ = false;
-        desc->command_metric_query_ = desc_query;
-        command_lists_mutex_.lock();
-        it->second->commands_.push_back(desc);
-        if (query != nullptr) {
-          desc_query->immediate_ = false;
-          it->second->metric_queries_.push_back(desc_query);
-        }
-        command_lists_mutex_.unlock();
-      }
-    }
-    else {
-      command_lists_mutex_.unlock_shared();
-    }
-  }
-
-  void AppendCommand(
-      ZeCollector *collector, 
-      ZeDeviceCommandHandle handle,
-      ze_event_handle_t& event_to_signal,
-      zet_metric_query_handle_t& query,
-      ze_command_list_handle_t command_list,
-      std::vector<uint64_t> *kids) {
-
-    if (local_device_submissions_.IsFinalized()) {
-      return;
-    }
-
-    command_lists_mutex_.lock_shared();
-      
-    uint64_t command_id;
-    bool found = false;
-
-    kernel_command_properties_mutex_.lock_shared();
-    auto kit = active_command_properties_->find(handle);
-    if (kit != active_command_properties_->end()) {
-      command_id = kit->second.id_;
-      found = true;
-    }
-    kernel_command_properties_mutex_.unlock_shared();
-
-    auto it = command_lists_.find(command_list);
-    if (found && (it != command_lists_.end())) {
-      ZeCommand *desc = nullptr;
-      ZeCommandMetricQuery *desc_query = nullptr;
-        
-      desc = local_device_submissions_.GetKernelCommand();
-
-      desc->type_ = KERNEL_COMMAND_TYPE_COMMAND;
-      desc->kernel_command_id_ = command_id;;
-      desc->engine_ordinal_ = it->second->engine_ordinal_;
-      desc->engine_index_ = it->second->engine_index_;
-      desc->host_time_origin_ = it->second->host_time_origin_;	// in ns
-      desc->device_timer_frequency_ = it->second->device_timer_frequency_;
-      desc->device_timer_mask_ = it->second->device_timer_mask_;
-      desc->metric_timer_frequency_ = it->second->metric_timer_frequency_;
-      desc->metric_timer_mask_ = it->second->metric_timer_mask_;
-      desc->device_ = it->second->device_;
-      ze_context_handle_t context = it->second->context_;
-      command_lists_mutex_.unlock_shared();
-
-      desc->group_count_ = {0, 0, 0};
-      desc->mem_size_ = 0;
-      desc->event_ = event_to_signal;
-      desc->command_list_ = command_list;
-      desc->queue_ = nullptr;
-      desc->tid_ = utils::GetTid();
-      if (query != nullptr) {
-        desc_query = local_device_submissions_.GetCommandMetricQuery();
-
-        ze_event_handle_t metric_query_event = collector->event_cache_.GetEvent(context);
-        desc_query->metric_query_ = query;
-        ze_result_t status = zetCommandListAppendMetricQueryEnd(command_list, query, metric_query_event, 0, nullptr);
-        PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-      }
-
-      uint64_t host_timestamp = ze_instance_data.timestamp_host;
-      if (it->second->immediate_) {
-        desc->immediate_ = true;
-        desc->instance_id_ = UniKernelInstanceId::GetKernelInstanceId();
-        desc->append_time_ = host_timestamp;
-        desc->submit_time_ = host_timestamp;
-        desc->submit_time_device_ = ze_instance_data.timestamp_device;	// append time and submit time are the same
-        desc->command_metric_query_ = nullptr;
-
-        local_device_submissions_.SubmitKernelCommand(desc);
-        kids->push_back(desc->instance_id_);
-        if (query != nullptr) {
-          desc_query->instance_id_ = desc->instance_id_;
-          desc_query->immediate_ = true;
-          local_device_submissions_.SubmitCommandMetricQuery(desc_query);
-        }
-      }
-      else {
-        desc->append_time_ = host_timestamp;
-        desc->immediate_ = false;
-        desc->command_metric_query_ = desc_query;
-        command_lists_mutex_.lock();
-        it->second->commands_.push_back(desc);
-        if (query != nullptr) {
-          desc_query->immediate_ = false;
-          it->second->metric_queries_.push_back(desc_query);
-        }
-        command_lists_mutex_.unlock();
-      }
-    }
-    else {
-      command_lists_mutex_.unlock_shared();
-    }
-  }
-
-  static void OnEnterCommandListAppendLaunchKernel(
-      ze_command_list_append_launch_kernel_params_t* params,
-      void* global_data, void** instance_data) {
-    if (UniController::IsCollectionEnabled()) {
-      ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-      zet_metric_query_handle_t query = PrepareToAppendKernelCommand(collector, *(params->phSignalEvent), *(params->phCommandList), true);
-      *instance_data = reinterpret_cast<void*>(query);
-    }
-    else {
-      *instance_data = nullptr;
-    }
-  }
-
-  static void OnExitCommandListAppendLaunchKernel(
-    ze_command_list_append_launch_kernel_params_t* params,
-    ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      collector->AppendLaunchKernel(
-        collector,
-        *(params->phKernel),
-        *(params->ppLaunchFuncArgs),
-        *(params->phSignalEvent),
-        query,
-        *(params->phCommandList),
-        kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
 
   static void OnEnterCommandListAppendLaunchCooperativeKernel(
       ze_command_list_append_launch_cooperative_kernel_params_t* params,
@@ -3257,60 +2451,11 @@ class ZeCollector {
     }
   }
 
-  static void OnExitCommandListAppendLaunchCooperativeKernel(
-      ze_command_list_append_launch_cooperative_kernel_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-        collector->AppendLaunchKernel(
-          collector,
-          *(params->phKernel),
-          *(params->ppLaunchFuncArgs),
-          *(params->phSignalEvent),
-          query,
-          *(params->phCommandList),
-          kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
 
-  static void OnEnterCommandListAppendLaunchKernelIndirect(
-      ze_command_list_append_launch_kernel_indirect_params_t* params,
-      void* global_data, void** instance_data) {
-    if (UniController::IsCollectionEnabled()) {
-      ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-      zet_metric_query_handle_t query = PrepareToAppendKernelCommand(collector, *(params->phSignalEvent), *(params->phCommandList), true);
-      *instance_data = reinterpret_cast<void*>(query);
-    }
-    else {
-      *instance_data = nullptr;
-    }
-  }
 
-  static void OnExitCommandListAppendLaunchKernelIndirect(
-      ze_command_list_append_launch_kernel_indirect_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-        collector->AppendLaunchKernel(
-          collector,
-          *(params->phKernel),
-          *(params->ppLaunchArgumentsBuffer),
-          *(params->phSignalEvent),
-          query,
-          *(params->phCommandList),
-          kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
+
+
+
 
   int GetMemoryTransferType(ze_context_handle_t src_context, const void *src) {
 
@@ -3413,22 +2558,6 @@ class ZeCollector {
     }
   }
 
-  static void OnExitCommandListAppendMemoryCopy(
-      ze_command_list_append_memory_copy_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      collector->AppendMemoryCommand(collector, MemoryCopy, *(params->psize),
-          *(params->psrcptr), *(params->pdstptr), *(params->phSignalEvent), query,
-          *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
-
   static void OnEnterCommandListAppendMemoryFill(
       ze_command_list_append_memory_fill_params_t* params,
       void* global_data, void** instance_data) {
@@ -3439,50 +2568,6 @@ class ZeCollector {
     }
     else {
       *instance_data = nullptr;
-    }
-  }
-
-  static void OnExitCommandListAppendMemoryFill(
-      ze_command_list_append_memory_fill_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      collector->AppendMemoryCommand(collector, MemoryFill, *(params->psize),
-          *(params->pptr), nullptr, *(params->phSignalEvent), query,
-          *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
-
-  static void OnEnterCommandListAppendBarrier(
-      ze_command_list_append_barrier_params_t* params,
-      void* global_data, void** instance_data) {
-    if (UniController::IsCollectionEnabled()) {
-      ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-      zet_metric_query_handle_t query = PrepareToAppendKernelCommand(collector, *(params->phSignalEvent), *(params->phCommandList), false);
-      *instance_data = reinterpret_cast<void*>(query);
-    }
-    else {
-      *instance_data = nullptr;
-    }
-  }
-
-  static void OnExitCommandListAppendBarrier(
-      ze_command_list_append_barrier_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      collector->AppendCommand(collector, Barrier, *(params->phSignalEvent), query,
-          *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
     }
   }
 
@@ -3499,21 +2584,6 @@ class ZeCollector {
     }
   }
 
-  static void OnExitCommandListAppendMemoryRangesBarrier(
-      ze_command_list_append_memory_ranges_barrier_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      collector->AppendCommand(collector, MemoryRangesBarrier, *(params->phSignalEvent), query,
-          *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
-
   static void OnEnterCommandListAppendMemoryCopyRegion(
       ze_command_list_append_memory_copy_region_params_t* params,
       void* global_data, void** instance_data) {
@@ -3524,32 +2594,6 @@ class ZeCollector {
     }
     else {
       *instance_data = nullptr;
-    }
-  }
-
-  static void OnExitCommandListAppendMemoryCopyRegion(
-      ze_command_list_append_memory_copy_region_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      size_t bytes_transferred = 0;
-      const ze_copy_region_t* region = *(params->psrcRegion);
-
-      if (region != nullptr) {
-        size_t bytes_transferred = region->width * region->height * (*(params->psrcPitch));
-        if (region->depth != 0) {
-          bytes_transferred *= region->depth;
-        }
-      }
-
-      collector->AppendMemoryCommand(collector, MemoryCopyRegion, bytes_transferred,
-        *(params->psrcptr), *(params->pdstptr), *(params->phSignalEvent), query,
-         *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
     }
   }
 
@@ -3566,24 +2610,6 @@ class ZeCollector {
     }
   }
 
-  static void OnExitCommandListAppendMemoryCopyFromContext(
-      ze_command_list_append_memory_copy_from_context_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      ze_context_handle_t src_context = *(params->phContextSrc);
-      ze_context_handle_t dst_context = nullptr;
-      collector->AppendMemoryCommandContext(collector, MemoryCopyFromContext, *(params->psize),
-        src_context, *(params->psrcptr), nullptr, *(params->pdstptr), *(params->phSignalEvent), query,
-        *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
-
   static void OnEnterCommandListAppendImageCopy(
       ze_command_list_append_image_copy_params_t* params,
       void* global_data, void** instance_data) {
@@ -3594,51 +2620,6 @@ class ZeCollector {
     }
     else {
       *instance_data = nullptr;
-    }
-  }
-
-  static void OnExitCommandListAppendImageCopy(
-      ze_command_list_append_image_copy_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      collector->AppendImageMemoryCopyCommand(collector, ImageCopy, *(params->phSrcImage),
-        nullptr, nullptr, *(params->phSignalEvent), query,
-        *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
-
-  static void OnEnterCommandListAppendImageCopyRegion(
-      ze_command_list_append_image_copy_region_params_t* params,
-      void* global_data, void** instance_data) {
-    if (UniController::IsCollectionEnabled()) {
-      ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-      zet_metric_query_handle_t query = PrepareToAppendKernelCommand(collector, *(params->phSignalEvent), *(params->phCommandList), false);
-      *instance_data = reinterpret_cast<void*>(query);
-    }
-    else {
-      *instance_data = nullptr;
-    }
-  }
-
-  static void OnExitCommandListAppendImageCopyRegion(
-      ze_command_list_append_image_copy_region_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      collector->AppendImageMemoryCopyCommand(collector, ImageCopyRegion, *(params->phSrcImage),
-        nullptr, nullptr, *(params->phSignalEvent), query,
-        *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
     }
   }
 
@@ -3655,22 +2636,6 @@ class ZeCollector {
     }
   }
 
-  static void OnExitCommandListAppendImageCopyToMemory(
-      ze_command_list_append_image_copy_to_memory_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      collector->AppendImageMemoryCopyCommand(collector, ImageCopyToMemory, *(params->phSrcImage),
-        nullptr, *(params->pdstptr), *(params->phSignalEvent), query,
-        *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
-
   static void OnEnterCommandListAppendImageCopyFromMemory(
       ze_command_list_append_image_copy_from_memory_params_t* params,
       void* global_data, void** instance_data) {
@@ -3684,31 +2649,7 @@ class ZeCollector {
     }
   }
 
-  static void OnExitCommandListAppendImageCopyFromMemory(
-      ze_command_list_append_image_copy_from_memory_params_t* params,
-      ze_result_t result, void* global_data, void** instance_data, std::vector<uint64_t> *kids) {
-    zet_metric_query_handle_t query = reinterpret_cast<zet_metric_query_handle_t>(*instance_data);
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-    if ((result == ZE_RESULT_SUCCESS) && (UniController::IsCollectionEnabled())) {
-      size_t bytes_transferred = 0;
-      const ze_image_region_t* region = *(params->ppDstRegion);
 
-      if (region != nullptr) {
-        bytes_transferred = region->width * region->height;
-        if (region->depth != 0) {
-          bytes_transferred *= region->depth;
-        }
-      }
-
-      collector->AppendMemoryCommand(collector, ImageCopyFromMemory, bytes_transferred,
-        *(params->psrcptr), nullptr, *(params->phSignalEvent), query,
-        *(params->phCommandList), kids);
-    }
-    else {
-      collector->query_pools_.PutQuery(query);
-      collector->event_cache_.ReleaseEvent(*(params->phSignalEvent));
-    }
-  }
 
   static void OnExitCommandListCreate(
       ze_command_list_create_params_t* params,
@@ -3998,43 +2939,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
     }
   }
 
-  static void OnExitKernelSetGroupSize(ze_kernel_set_group_size_params_t* params, ze_result_t result,
-    void* global_data, void** instance_data) {
-    if (result == ZE_RESULT_SUCCESS) {
-      if (UniController::IsCollectionEnabled()) {
-        ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
-        ZeKernelGroupSize group_size{*(params->pgroupSizeX), *(params->pgroupSizeY), *(params->pgroupSizeZ)};
-        kernel_command_properties_mutex_.lock();
-
-        auto it = active_kernel_properties_->find(*(params->phKernel));
-        PTI_ASSERT(it != active_kernel_properties_->end());
-        if ((it->second.group_size_.x != group_size.x) || (it->second.group_size_.y != group_size.y) ||
-          (it->second.group_size_.z != group_size.z)) {
-          // new group size
-          it->second.group_size_ = group_size;
-          auto it2 = kernel_command_properties_->find(it->second.id_);
-          if ((it2 != kernel_command_properties_->end()) && 
-            (it2->second.group_size_.x == group_size.x) && 
-            (it2->second.group_size_.y == group_size.y) && 
-            (it2->second.group_size_.z == group_size.z)) {
-            // group size was used before 
-            it->second.id_ = it2->second.id_;
-          }
-          else {
-            // first time use the group size
-            it->second.id_ = UniKernelId::GetKernelId();
-            ZeKernelCommandProperties desc2 = it->second;
-            kernel_command_properties_->insert({desc2.id_, std::move(desc2)});
-          }
-        }
-        else {
-          // do nothing
-        }
-
-        kernel_command_properties_mutex_.unlock();
-      }
-    }
-  }
 
   static void OnExitKernelDestroy(ze_kernel_destroy_params_t* params, ze_result_t result, void* global_data, void** instance_data) {
     if (result == ZE_RESULT_SUCCESS) {
