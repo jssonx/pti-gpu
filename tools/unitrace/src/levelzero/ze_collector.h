@@ -410,8 +410,7 @@ class ZeCollector {
 
   static ZeCollector* Create(
       Correlator* correlator,
-      CollectorOptions options,
-      void* callback_data = nullptr) {
+      CollectorOptions options) {
     ze_api_version_t version = utils::ze::GetVersion();
     PTI_ASSERT(
         ZE_MAJOR_VERSION(version) >= 1 &&
@@ -421,7 +420,7 @@ class ZeCollector {
 
     std::string data_dir_name = utils::GetEnv("UNITRACE_DataDir");
     ZeCollector* collector = new ZeCollector(
-        correlator, options, callback_data, data_dir_name);
+        correlator, options, data_dir_name);
 
     UniMemory::ExitIfOutOfMemory((void *)(collector));
 
@@ -486,11 +485,9 @@ class ZeCollector {
   ZeCollector(
       Correlator* correlator,
       CollectorOptions options,
-      void* callback_data,
       std::string& data_dir_name)
       : correlator_(correlator),
         options_(options),
-        callback_data_(callback_data),
         event_cache_(ZE_EVENT_POOL_FLAG_KERNEL_TIMESTAMP) {
     data_dir_name_ = data_dir_name;
     EnumerateAndSetupDevices();
@@ -899,7 +896,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
   zel_tracer_handle_t tracer_ = nullptr;
   CollectorOptions options_;
   Correlator* correlator_ = nullptr;
-  void* callback_data_ = nullptr;
 
   mutable std::shared_mutex images_mutex_;
   std::map<ze_image_handle_t, size_t> images_;

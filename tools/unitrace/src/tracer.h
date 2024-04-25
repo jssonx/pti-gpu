@@ -56,7 +56,7 @@ class UniTracer {
 
     if (collector_options.kernel_tracing || collector_options.api_tracing) {
 
-      ze_collector = ZeCollector::Create(&tracer->correlator_, collector_options, tracer);
+      ze_collector = ZeCollector::Create(&tracer->correlator_, collector_options);
       if (ze_collector == nullptr) {
         std::cerr <<
           "[WARNING] Unable to create kernel collector for L0 backend" <<

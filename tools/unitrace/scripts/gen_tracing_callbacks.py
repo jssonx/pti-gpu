@@ -805,39 +805,6 @@ def main():
       "zeKernelCreate",
       "zeKernelSetGroupSize",
       "zeKernelDestroy"]
-  command_list_func_list = [
-      "zeCommandListAppendLaunchKernel",
-      "zeCommandListAppendLaunchCooperativeKernel",
-      "zeCommandListAppendLaunchKernelIndirect",
-      "zeCommandListAppendMemoryCopy",
-      "zeCommandListAppendMemoryFill",
-      "zeCommandListAppendBarrier",
-      "zeCommandListAppendMemoryRangesBarrier",
-      "zeCommandListAppendMemoryCopyRegion",
-      "zeCommandListAppendMemoryCopyFromContext",
-      "zeCommandListAppendImageCopy",
-      "zeCommandListAppendImageCopyRegion",
-      "zeCommandListAppendImageCopyToMemory",
-      "zeCommandListAppendImageCopyFromMemory"]
-
-  command_queue_func_list = [
-      "zeCommandQueueExecuteCommandLists"]
-    
-  submission_func_list = []
-  for func in command_list_func_list:
-    submission_func_list.append(func)
-
-  submission_func_list.append("zeCommandQueueExecuteCommandLists")
-
-  synchronize_func_list_on_enter = [
-      "zeEventDestroy",
-      "zeEventHostReset"]
-    
-  synchronize_func_list_on_exit = [
-      "zeEventHostSynchronize",
-      "zeEventQueryStatus",
-      "zeFenceHostSynchronize",
-      "zeCommandQueueSynchronize"]
 
   group_map = get_callback_group_map(l0_file)
   param_map = get_param_map(l0_file)
