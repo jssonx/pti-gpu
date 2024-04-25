@@ -403,10 +403,6 @@ struct ZeCommandList {
   std::vector<ZeCommand *> commands_;	// if non-immediate command list
 };
 
-typedef void (*OnZeFunctionFinishCallback)(std::vector<uint64_t> *kids, FLOW_DIR flow_dir, API_TRACING_ID api_id, uint64_t started, uint64_t ended);
-
-typedef void (*OnZeKernelFinishCallback)(uint64_t kid, uint64_t tid, uint64_t start, uint64_t end, uint32_t ordinal, uint32_t index, int32_t tile, const ze_device_handle_t device, const uint64_t kernel_command_id, bool implicit_scaling, const ze_group_count_t& group_count, size_t mem_size);
-
 ze_result_t (*zexKernelGetBaseAddress)(ze_kernel_handle_t hKernel, uint64_t *baseAddress) = nullptr; // TODO
 
 class ZeCollector {
@@ -415,8 +411,6 @@ class ZeCollector {
   static ZeCollector* Create(
       Correlator* correlator,
       CollectorOptions options,
-      OnZeKernelFinishCallback kcallback = nullptr,
-      OnZeFunctionFinishCallback fcallback = nullptr,
       void* callback_data = nullptr) {
     ze_api_version_t version = utils::ze::GetVersion();
     PTI_ASSERT(
@@ -427,7 +421,7 @@ class ZeCollector {
 
     std::string data_dir_name = utils::GetEnv("UNITRACE_DataDir");
     ZeCollector* collector = new ZeCollector(
-        correlator, options, kcallback, fcallback, callback_data, data_dir_name);
+        correlator, options, callback_data, data_dir_name);
 
     UniMemory::ExitIfOutOfMemory((void *)(collector));
 
@@ -442,7 +436,28 @@ class ZeCollector {
       return nullptr;
     }
 
-    collector->EnableTracing(tracer);
+    // collector->EnableTracing(tracer);
+    zet_core_callbacks_t prologue = {};
+    zet_core_callbacks_t epilogue = {};
+
+    prologue.Module.pfnCreateCb = zeModuleCreateOnEnter;
+    epilogue.Module.pfnCreateCb = zeModuleCreateOnExit;
+    prologue.Module.pfnDestroyCb = zeModuleDestroyOnEnter;
+    epilogue.Module.pfnDestroyCb = zeModuleDestroyOnExit;
+    prologue.Kernel.pfnCreateCb = zeKernelCreateOnEnter;
+    epilogue.Kernel.pfnCreateCb = zeKernelCreateOnExit;
+    prologue.Kernel.pfnSetGroupSizeCb = zeKernelSetGroupSizeOnEnter;
+    epilogue.Kernel.pfnSetGroupSizeCb = zeKernelSetGroupSizeOnExit;
+    prologue.Kernel.pfnDestroyCb = zeKernelDestroyOnEnter;
+    epilogue.Kernel.pfnDestroyCb = zeKernelDestroyOnExit;
+
+    // ze_result_t status = ZE_RESULT_SUCCESS;
+    status = zelTracerSetPrologues(tracer, &prologue);
+    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
+    status = zelTracerSetEpilogues(tracer, &epilogue);
+    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
+    status = zelTracerSetEnabled(tracer, true);
+    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
 
     collector->tracer_ = tracer;
     
@@ -492,14 +507,10 @@ class ZeCollector {
   ZeCollector(
       Correlator* correlator,
       CollectorOptions options,
-      OnZeKernelFinishCallback kcallback,
-      OnZeFunctionFinishCallback fcallback,
       void* callback_data,
       std::string& data_dir_name)
       : correlator_(correlator),
         options_(options),
-        kcallback_(kcallback),
-        fcallback_(fcallback),
         callback_data_(callback_data),
         event_cache_(ZE_EVENT_POOL_FLAG_KERNEL_TIMESTAMP) {
     data_dir_name_ = data_dir_name;
@@ -909,8 +920,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
   zel_tracer_handle_t tracer_ = nullptr;
   CollectorOptions options_;
   Correlator* correlator_ = nullptr;
-  OnZeKernelFinishCallback kcallback_ = nullptr;
-  OnZeFunctionFinishCallback fcallback_ = nullptr;
   void* callback_data_ = nullptr;
 
   mutable std::shared_mutex images_mutex_;

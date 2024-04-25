@@ -33,8 +33,6 @@ class UniTracer {
     CollectorOptions collector_options;
     collector_options.metric_stream = false;
     collector_options.stall_sampling = false;
-    OnZeKernelFinishCallback ze_kcallback = nullptr;
-    OnZeFunctionFinishCallback ze_fcallback = nullptr;
     ZeCollector* ze_collector = nullptr;
 
     if (tracer->CheckOption(TRACE_DEVICE_TIMING)) {
@@ -58,7 +56,7 @@ class UniTracer {
 
     if (collector_options.kernel_tracing || collector_options.api_tracing) {
 
-      ze_collector = ZeCollector::Create(&tracer->correlator_, collector_options, ze_kcallback, ze_fcallback, tracer);
+      ze_collector = ZeCollector::Create(&tracer->correlator_, collector_options, tracer);
       if (ze_collector == nullptr) {
         std::cerr <<
           "[WARNING] Unable to create kernel collector for L0 backend" <<

@@ -242,25 +242,7 @@ def gen_api(f, func_list, kfunc_list, group_map):
   f.write("  zet_core_callbacks_t prologue = {};\n")
   f.write("  zet_core_callbacks_t epilogue = {};\n")
   f.write("\n")
-  f.write("  if (options_.api_tracing) {\n")
-  for func in func_list:
-    if not func in group_map:
-      continue
-
-    group, callback = group_map[func]
-    group_name = group[0]
-    group_cond = group[1]
-    assert not group_cond
-    callback_name = callback[0]
-    callback_cond = callback[1]
-    if callback_cond:
-      f.write("#if " + callback_cond + "\n")
-    f.write("    prologue." + group_name + "." + callback_name + " = " + func + "OnEnter;\n")
-    f.write("    epilogue." + group_name + "." + callback_name + " = " + func + "OnExit;\n")
-    if callback_cond:
-      f.write("#endif //" + callback_cond + "\n")
-  f.write("  }\n")
-  f.write("  else if (options_.kernel_tracing) {\n")
+  f.write("  if (options_.kernel_tracing) {\n")
   for func in kfunc_list:
     if not func in group_map:
       continue
@@ -374,9 +356,6 @@ def gen_enter_callback(f, func, command_list_func_list, command_queue_func_list,
   f.write("  PTI_ASSERT(collector->correlator_ != nullptr);\n")
   f.write("\n")
   f.write("  if (!UniController::IsCollectionEnabled()) {\n")
-  #f.write("    (((ZeInstanceData *)(*instance_user_data))->api_instance_data) = 0;\n")
-  #f.write("    *reinterpret_cast<uint64_t*>(instance_user_data) = 0;\n")
-  #f.write("    *reinterpret_cast<uint64_t*>(&ze_api_instance_data) = 0;\n")
   f.write("    ze_instance_data.start_time_host = 0; \n")
   f.write("    return;\n")
   f.write("  }\n")
@@ -790,35 +769,7 @@ def gen_exit_callback(f, func, submission_func_list, synchronize_func_list_on_en
     f.write("      }\n")
     f.write("    }\n")
     f.write("    free(p);\n")
-
-  f.write("    collector->correlator_->Log(str);\n")
-  f.write("  }\n")
-  f.write("\n")
-  f.write("  if (collector->fcallback_ != nullptr) {\n")
-  if ((func in submission_func_list) or (func in synchronize_func_list_on_enter) or (func in synchronize_func_list_on_exit)):
-    f.write("    if (kids.size() == 0) {\n")
-    f.write("      collector->fcallback_(\n")
-    f.write("          nullptr, FLOW_NUL,\n")
-    f.write("          "+func[2:]+"TracingId,\n")
-    f.write("          start_time_host, end_time_host);\n")
-    f.write("    }\n")
-    f.write("    else {\n")
-    if (func in submission_func_list):
-      f.write("      collector->fcallback_(\n")
-      f.write("          &kids, FLOW_H2D,\n")
-      f.write("          "+func[2:]+"TracingId,\n")
-      f.write("          start_time_host, end_time_host);\n")
-    else:
-      f.write("      collector->fcallback_(\n")
-      f.write("          &kids, FLOW_D2H,\n")
-      f.write("          "+func[2:]+"TracingId,\n")
-      f.write("          start_time_host, end_time_host);\n")
-    f.write("    }\n")
-  else:
-    f.write("      collector->fcallback_(\n")
-    f.write("          nullptr, FLOW_NUL,\n")
-    f.write("          "+func[2:]+"TracingId,\n")
-    f.write("          start_time_host, end_time_host);\n")
+    
   f.write("  }\n")
 
 def gen_callbacks(f, func_list, command_list_func_list, command_queue_func_list, submission_func_list, synchronize_func_list_on_enter, synchronize_func_list_on_exit, group_map, param_map, enum_map):
@@ -872,41 +823,11 @@ def main():
   l0_file = open(l0_file_path, "rt")
   func_list = get_func_list(l0_file)
   kfunc_list = [
-      "zeEventDestroy",
-      "zeEventHostReset",
-      "zeEventPoolCreate",
-      "zeCommandListAppendLaunchKernel",
-      "zeCommandListAppendLaunchCooperativeKernel",
-      "zeCommandListAppendLaunchKernelIndirect",
-      "zeCommandListAppendMemoryCopy",
-      "zeCommandListAppendMemoryFill",
-      "zeCommandListAppendBarrier",
-      "zeCommandListAppendMemoryRangesBarrier",
-      "zeCommandListAppendMemoryCopyRegion",
-      "zeCommandListAppendMemoryCopyFromContext",
-      "zeCommandListAppendImageCopy",
-      "zeCommandListAppendImageCopyRegion",
-      "zeCommandListAppendImageCopyToMemory",
-      "zeCommandListAppendImageCopyFromMemory",
-      "zeCommandQueueExecuteCommandLists",
-      "zeCommandListCreate",
-      "zeCommandListCreateImmediate",
-      "zeCommandListDestroy",
-      "zeCommandListReset",
-      "zeCommandQueueCreate",
-      "zeCommandQueueSynchronize",
-      "zeCommandQueueDestroy",
-      "zeImageCreate",
-      "zeImageDestroy",
       "zeModuleCreate",
       "zeModuleDestroy",
       "zeKernelCreate",
       "zeKernelSetGroupSize",
-      "zeKernelDestroy",
-      "zeEventHostSynchronize",
-      "zeEventQueryStatus",
-      "zeFenceHostSynchronize",
-      "zeContextDestroy"]
+      "zeKernelDestroy"]
   command_list_func_list = [
       "zeCommandListAppendLaunchKernel",
       "zeCommandListAppendLaunchCooperativeKernel",
