@@ -25,8 +25,8 @@
 #include <level_zero/ze_api.h>
 #include <level_zero/layers/zel_tracing_api.h>
 
-#include "utils.h" // utils
-#include "ze_utils.h" // utils
+#include "utils.h"
+#include "ze_utils.h"
 #include "collector_options.h"
 #include "unikernel.h"
 #include "unitimer.h"
@@ -129,7 +129,7 @@ struct ZeDevice {
 static std::shared_mutex devices_mutex_;
 static std::map<ze_device_handle_t, ZeDevice> *devices_;
 
-ze_result_t (*zexKernelGetBaseAddress)(ze_kernel_handle_t hKernel, uint64_t *baseAddress) = nullptr; // TODO
+ze_result_t (*zexKernelGetBaseAddress)(ze_kernel_handle_t hKernel, uint64_t *baseAddress) = nullptr;
 
 class ZeCollector {
  public: // Interface
@@ -203,7 +203,7 @@ class ZeCollector {
     InitializeKernelCommandProperties();
   }
 
-  void InitializeKernelCommandProperties(void) { // TODO
+  void InitializeKernelCommandProperties(void) {
     kernel_command_properties_mutex_.lock();
     if (active_kernel_properties_ == nullptr) {
       active_kernel_properties_ = new std::map<ze_kernel_handle_t, ZeKernelCommandProperties>;
@@ -325,7 +325,7 @@ class ZeCollector {
     }
   }
 
-  void DumpKernelProfiles(void) { // TODO
+  void DumpKernelProfiles(void) {
     ze_device_handle_t device = nullptr;
     int did = -1;
     zet_metric_group_handle_t group = nullptr;
@@ -383,7 +383,7 @@ class ZeCollector {
 
  private: // Callbacks
 
-  static void OnExitModuleCreate(ze_module_create_params_t* params, ze_result_t result, void* global_data, void** instance_user_data) { // TODO
+  static void OnExitModuleCreate(ze_module_create_params_t* params, ze_result_t result, void* global_data, void** instance_user_data) {
     if (result == ZE_RESULT_SUCCESS) {
       ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
       ze_module_handle_t mod = **(params->pphModule);
@@ -405,7 +405,7 @@ class ZeCollector {
     }
   }
 
-  static void OnEnterModuleDestroy(ze_module_destroy_params_t* params, void* global_data, void** instance_user_data) { // TODO
+  static void OnEnterModuleDestroy(ze_module_destroy_params_t* params, void* global_data, void** instance_user_data) {
     ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
     ze_module_handle_t mod = *(params->phModule);
     modules_on_devices_mutex_.lock();
@@ -424,7 +424,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
 
 #endif /* !defined(ZEX_STRUCTURE_KERNEL_REGISTER_FILE_SIZE_EXP) */
 
-  static void OnExitKernelCreate(ze_kernel_create_params_t *params, ze_result_t result, void* global_data, void** instance_user_data) { // TODO
+  static void OnExitKernelCreate(ze_kernel_create_params_t *params, ze_result_t result, void* global_data, void** instance_user_data) {
     if (result == ZE_RESULT_SUCCESS) {
       ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
       ze_kernel_handle_t kernel = **(params->pphKernel);
@@ -522,8 +522,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
     }
   }
 
-
-  static void OnExitKernelDestroy(ze_kernel_destroy_params_t* params, ze_result_t result, void* global_data, void** instance_data) { // TODO
+  static void OnExitKernelDestroy(ze_kernel_destroy_params_t* params, ze_result_t result, void* global_data, void** instance_data) {
     if (result == ZE_RESULT_SUCCESS) {
       ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
       kernel_command_properties_mutex_.lock();
