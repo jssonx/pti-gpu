@@ -330,27 +330,15 @@ def get_kernel_tracing_callback(func):
     fp.close()
     return cb
 
-def gen_enter_callback(f, func, command_list_func_list, command_queue_func_list, synchronize_func_list, params, enum_map):
+def gen_enter_callback(f, func, params, enum_map):
   f.write("  ZeCollector* collector =\n")
   f.write("    reinterpret_cast<ZeCollector*>(global_user_data);\n")
-
-  if (func in synchronize_func_list):
-    f.write("  std::vector<uint64_t> kids;\n")
 
   f.write("\n")
   cb = get_kernel_tracing_callback('OnEnter' + func[2:])
   if (cb != ""):
     f.write("  if (collector->options_.kernel_tracing) { \n")
-    if (func in synchronize_func_list):
-      f.write("    " + cb + "(params, global_user_data, instance_user_data, &kids); \n")
-      f.write("    if (kids.size() != 0) {\n")
-      f.write("        ze_instance_data.kid = kids[0];\n") # pass kid to the exit callback
-      f.write("    }\n")
-      f.write("    else {\n")
-      f.write("        ze_instance_data.kid = (uint64_t)(-1);\n")
-      f.write("    }\n")     
-    else:
-      f.write("    " + cb + "(params, global_user_data, instance_user_data); \n")
+    f.write("    " + cb + "(params, global_user_data, instance_user_data); \n")
     f.write("  }\n")
     f.write("\n")
   f.write("  PTI_ASSERT(collector->correlator_ != nullptr);\n")
@@ -632,7 +620,7 @@ def gen_enter_callback(f, func, command_list_func_list, command_queue_func_list,
 
   f.write("  ze_instance_data.start_time_host = start_time_host;\n")
 
-def gen_exit_callback(f, func, submission_func_list, synchronize_func_list_on_enter, synchronize_func_list_on_exit, params, enum_map):
+def gen_exit_callback(f, func, params, enum_map):
   f.write("  ZeCollector* collector =\n")
   f.write("    reinterpret_cast<ZeCollector*>(global_user_data);\n")
   
@@ -642,20 +630,9 @@ def gen_exit_callback(f, func, submission_func_list, synchronize_func_list_on_en
     
   cb = get_kernel_tracing_callback('OnExit' + func[2:])
 
-  if ((func in submission_func_list) or (func in synchronize_func_list_on_enter) or (func in synchronize_func_list_on_exit)):
-    f.write("  std::vector<uint64_t> kids;\n")
-
-  if (func in synchronize_func_list_on_enter):	# enter callback pass the kids to exit callback
-    f.write("  if (ze_instance_data.kid != (uint64_t)(-1)) {\n")
-    f.write("      kids.push_back(ze_instance_data.kid);\n")
-    f.write("  }\n")
-
   if (cb != ""):
     f.write("  if (collector->options_.kernel_tracing) { \n")
-    if ((func in submission_func_list) or (func in synchronize_func_list_on_exit)):
-      f.write("    " + cb + "(params, result, global_user_data, instance_user_data, &kids); \n")
-    else:
-      f.write("    " + cb + "(params, result, global_user_data, instance_user_data); \n")
+    f.write("    " + cb + "(params, result, global_user_data, instance_user_data); \n")
     f.write("  }\n")
     
     f.write("\n")
@@ -772,7 +749,7 @@ def gen_exit_callback(f, func, submission_func_list, synchronize_func_list_on_en
     
   f.write("  }\n")
 
-def gen_callbacks(f, func_list, command_list_func_list, command_queue_func_list, submission_func_list, synchronize_func_list_on_enter, synchronize_func_list_on_exit, group_map, param_map, enum_map):
+def gen_callbacks(f, func_list, group_map, param_map, enum_map):
   for func in func_list:
     if not func in group_map:
       continue
@@ -788,7 +765,7 @@ def gen_callbacks(f, func_list, command_list_func_list, command_queue_func_list,
     f.write("    ze_result_t result,\n")
     f.write("    void* global_user_data,\n")
     f.write("    void** instance_user_data) {\n")
-    gen_enter_callback(f, func, command_list_func_list, command_queue_func_list, synchronize_func_list_on_enter, param_map[func], enum_map)
+    gen_enter_callback(f, func, param_map[func], enum_map)
     f.write("}\n")
     f.write("\n")
     f.write("static void " + func + "OnExit(\n")
@@ -796,7 +773,7 @@ def gen_callbacks(f, func_list, command_list_func_list, command_queue_func_list,
     f.write("    ze_result_t result,\n")
     f.write("    void* global_user_data,\n")
     f.write("    void** instance_user_data) {\n")
-    gen_exit_callback(f, func, submission_func_list, synchronize_func_list_on_enter, synchronize_func_list_on_exit, param_map[func], enum_map)
+    gen_exit_callback(f, func, param_map[func], enum_map)
     f.write("}\n")
     if callback_cond:
       f.write("#endif //" + callback_cond + "\n")
@@ -868,7 +845,7 @@ def main():
 
   gen_result_converter(dst_file, enum_map)
   gen_structure_type_converter(dst_file, enum_map)
-  gen_callbacks(dst_file, func_list, command_list_func_list, command_queue_func_list, submission_func_list, synchronize_func_list_on_enter, synchronize_func_list_on_exit, group_map, param_map, enum_map)
+  gen_callbacks(dst_file, func_list, group_map, param_map, enum_map)
   gen_api(dst_file, func_list, kfunc_list, group_map)
 
   l0_file.close()

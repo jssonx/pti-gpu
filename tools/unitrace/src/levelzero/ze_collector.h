@@ -436,28 +436,7 @@ class ZeCollector {
       return nullptr;
     }
 
-    // collector->EnableTracing(tracer);
-    zet_core_callbacks_t prologue = {};
-    zet_core_callbacks_t epilogue = {};
-
-    prologue.Module.pfnCreateCb = zeModuleCreateOnEnter;
-    epilogue.Module.pfnCreateCb = zeModuleCreateOnExit;
-    prologue.Module.pfnDestroyCb = zeModuleDestroyOnEnter;
-    epilogue.Module.pfnDestroyCb = zeModuleDestroyOnExit;
-    prologue.Kernel.pfnCreateCb = zeKernelCreateOnEnter;
-    epilogue.Kernel.pfnCreateCb = zeKernelCreateOnExit;
-    prologue.Kernel.pfnSetGroupSizeCb = zeKernelSetGroupSizeOnEnter;
-    epilogue.Kernel.pfnSetGroupSizeCb = zeKernelSetGroupSizeOnExit;
-    prologue.Kernel.pfnDestroyCb = zeKernelDestroyOnEnter;
-    epilogue.Kernel.pfnDestroyCb = zeKernelDestroyOnExit;
-
-    // ze_result_t status = ZE_RESULT_SUCCESS;
-    status = zelTracerSetPrologues(tracer, &prologue);
-    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-    status = zelTracerSetEpilogues(tracer, &epilogue);
-    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-    status = zelTracerSetEnabled(tracer, true);
-    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
+    collector->EnableTracing(tracer);   
 
     collector->tracer_ = tracer;
     
