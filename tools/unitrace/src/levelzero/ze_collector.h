@@ -333,9 +333,6 @@ static const char *device_command_names[] = {
 
 static std::mutex global_kernel_profiles_mutex_;
 
-static std::mutex global_host_time_stats_mutex_;
-static std::map<uint32_t, ZeFunctionTime> *global_host_time_stats_;
-
 struct ZeCommand {
   uint64_t kernel_command_id_;	//kernel or command identifier
   uint64_t instance_id_ = 0;	//unique kernel or command instance identifier
@@ -362,82 +359,6 @@ struct ZeCommand {
   bool implicit_scaling_;
   bool immediate_;
 };
-
-struct ZeDeviceSubmissions;
-std::shared_mutex global_device_submissions_mutex_;
-std::set<ZeDeviceSubmissions *> *global_device_submissions_ = nullptr;
-
-struct ZeDeviceSubmissions {
-  std::list<ZeCommand *> commands_submitted_;
-  std::list<ZeCommand *> commands_staged_;
-  std::list<ZeCommand *> commands_free_pool_;
-  std::map<uint32_t, ZeFunctionTime> host_time_stats_;
-  std::atomic<bool> finalized_;
-
-  ZeDeviceSubmissions() {
-    finalized_.store(false, std::memory_order_release);
-
-    ZeCommand *command = new ZeCommand;
-
-    UniMemory::ExitIfOutOfMemory((void *)(command));
-    
-    commands_free_pool_.push_back(command);
-    global_device_submissions_mutex_.lock();
-    if (global_device_submissions_ == nullptr) {
-      global_device_submissions_ = new std::set<ZeDeviceSubmissions *>;
-      UniMemory::ExitIfOutOfMemory((void *)(global_device_submissions_));
-    }
-
-    global_device_submissions_->insert(this);
-    global_device_submissions_mutex_.unlock();
-  }
-
-  ~ZeDeviceSubmissions() {
-    global_device_submissions_mutex_.lock();
-    if (!finalized_.exchange(true)) {
-      // finalize if not finalized
-      global_device_submissions_->erase(this);
-    }
-    global_device_submissions_mutex_.unlock();
-  }
-  
-  ZeDeviceSubmissions(const struct ZeDeviceSubmissions& that) = delete;
-
-  ZeDeviceSubmissions& operator=(const struct ZeDeviceSubmissions& that) = delete;
-
-  inline void CollectHostFunctionTimeStats(uint32_t id, uint64_t host_time) {
-    auto it = host_time_stats_.find(id);
-    if (it == host_time_stats_.end()){
-      ZeFunctionTime stat;
-      stat.total_time_ = host_time;
-      stat.min_time_ = host_time;
-      stat.max_time_ = host_time;
-      stat.call_count_ = 1;
-      host_time_stats_.insert({id, std::move(stat)});
-    }
-    else {
-      it->second.total_time_ += host_time;
-      if (host_time > it->second.max_time_) {
-        it->second.max_time_ = host_time;
-      }
-      if (host_time < it->second.min_time_) {
-        it->second.min_time_ = host_time;
-      }
-      it->second.call_count_ += 1;
-    }
-  }
-
-  inline bool IsFinalized(void) {
-    return finalized_.load(std::memory_order_acquire);
-  }
-
-  inline void Finalize(void) {
-    // caller holds exclusive global_device_submissions_mutex_ lock
-    finalized_.store(true, std::memory_order_release);
-  }
-};
-
-thread_local ZeDeviceSubmissions local_device_submissions_;
 
 struct ZeKernelCommandProperties {
   uint64_t id_;		// unique identidier
@@ -617,15 +538,6 @@ class ZeCollector {
       ze_result_t status = zelTracerDestroy(tracer_);
       PTI_ASSERT(status == ZE_RESULT_SUCCESS);
     }
-
-    global_device_submissions_mutex_.lock();
-    if (global_device_submissions_) {
-      for (auto it = global_device_submissions_->begin(); it != global_device_submissions_->end();) {
-        (*it)->Finalize();
-        it = global_device_submissions_->erase(it);
-      }
-    }
-    global_device_submissions_mutex_.unlock();
 
     if (options_.metric_query) {
       for (auto it = metric_activations_.begin(); it != metric_activations_.end(); it++) {
@@ -1064,9 +976,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
 
   #include <tracing.gen> // Auto-generated callbacks
 
-  void CollectHostFunctionTimeStats(uint32_t id, uint64_t time) {
-    local_device_submissions_.CollectHostFunctionTimeStats(id, time);
-  }
+  void CollectHostFunctionTimeStats(uint32_t id, uint64_t time) {}
 
  private: // Data
   zel_tracer_handle_t tracer_ = nullptr;
