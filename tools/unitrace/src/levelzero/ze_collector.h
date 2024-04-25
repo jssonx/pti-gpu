@@ -443,80 +443,11 @@ using ZeKernelProfiles = std::map<uint64_t, ZeKernelProfileRecord>;
 static std::mutex global_kernel_profiles_mutex_;
 static ZeKernelProfiles global_kernel_profiles_;
 
-void SweepKernelProfiles(ZeKernelProfiles& profiles) {
-  const std::lock_guard<std::mutex> lock(global_kernel_profiles_mutex_);
-  global_kernel_profiles_.insert(profiles.begin(), profiles.end());
-}
-
 static std::mutex global_device_time_stats_mutex_;
 static std::map<ZeKernelCommandNameKey, ZeKernelCommandTime, ZeKernelCommandNameKeyCompare> *global_device_time_stats_;
 
-void SweepKernelCommandTimeStats(std::map<ZeKernelCommandNameKey, ZeKernelCommandTime, ZeKernelCommandNameKeyCompare>& stats) {
-  global_device_time_stats_mutex_.lock();
-  if (global_device_time_stats_ == nullptr) {
-    global_device_time_stats_ = new std::map<ZeKernelCommandNameKey, ZeKernelCommandTime, ZeKernelCommandNameKeyCompare>;
-    UniMemory::ExitIfOutOfMemory((void *)(global_device_time_stats_));
-  }
-  for (auto it = stats.begin(); it != stats.end(); it++) {
-    auto it2 = global_device_time_stats_->find(it->first);
-    if (it2 == global_device_time_stats_->end()) {
-      ZeKernelCommandTime stat;
-      stat.append_time_ = it->second.append_time_;
-      stat.submit_time_ = it->second.submit_time_;
-      stat.execute_time_ = it->second.execute_time_;
-      stat.min_time_ = it->second.min_time_;
-      stat.max_time_ = it->second.max_time_;
-      stat.call_count_ = it->second.call_count_;
-      global_device_time_stats_->insert({it->first, std::move(stat)});
-    }
-    else {
-      it2->second.append_time_ += it->second.append_time_;
-      it2->second.submit_time_ +=  it->second.submit_time_;
-      it2->second.execute_time_ += it->second.execute_time_;
-      if (it->second.max_time_ > it2->second.max_time_) {
-        it2->second.max_time_ = it->second.max_time_;
-      }
-      if (it->second.min_time_ < it2->second.min_time_) {
-        it2->second.min_time_ = it->second.min_time_;
-      }
-      it2->second.call_count_ += it->second.call_count_;
-    }
-  }
-  global_device_time_stats_mutex_.unlock();
-}
-
 static std::mutex global_host_time_stats_mutex_;
 static std::map<uint32_t, ZeFunctionTime> *global_host_time_stats_;
-
-void SweepHostFunctionTimeStats(std::map<uint32_t, ZeFunctionTime>& stats) {
-  global_host_time_stats_mutex_.lock();
-  if (global_host_time_stats_ == nullptr) {
-    global_host_time_stats_ = new std::map<uint32_t, ZeFunctionTime>;
-    UniMemory::ExitIfOutOfMemory((void *)(global_host_time_stats_));
-  }
-  for (auto it = stats.begin(); it != stats.end(); it++) {
-    auto it2 = global_host_time_stats_->find(it->first);
-    if (it2 == global_host_time_stats_->end()) {
-      ZeFunctionTime stat;
-      stat.total_time_ = it->second.total_time_;
-      stat.min_time_ = it->second.min_time_;
-      stat.max_time_ = it->second.max_time_;
-      stat.call_count_ = it->second.call_count_;
-      global_host_time_stats_->insert({it->first, std::move(stat)});
-    }
-    else {
-      it2->second.total_time_ += it->second.total_time_;
-      if (it->second.max_time_ > it2->second.max_time_) {
-        it2->second.max_time_ = it->second.max_time_;
-      }
-      if (it->second.min_time_ < it2->second.min_time_) {
-        it2->second.min_time_ = it->second.min_time_;
-      }
-      it2->second.call_count_ += it->second.call_count_;
-    }
-  }
-  global_host_time_stats_mutex_.unlock();
-}
 
 struct ZeCommandMetricQuery {
   uint64_t instance_id_ = 0;	//unique kernel or command instance identifier
@@ -594,9 +525,6 @@ struct ZeDeviceSubmissions {
     global_device_submissions_mutex_.lock();
     if (!finalized_.exchange(true)) {
       // finalize if not finalized
-      SweepKernelCommandTimeStats(device_time_stats_);
-      SweepHostFunctionTimeStats(host_time_stats_);
-      SweepKernelProfiles(kernel_profiles_);
       global_device_submissions_->erase(this);
     }
     global_device_submissions_mutex_.unlock();
@@ -761,9 +689,6 @@ struct ZeDeviceSubmissions {
   inline void Finalize(void) {
     // caller holds exclusive global_device_submissions_mutex_ lock
     finalized_.store(true, std::memory_order_release);
-    SweepKernelCommandTimeStats(device_time_stats_);
-    SweepHostFunctionTimeStats(host_time_stats_);
-    SweepKernelProfiles(kernel_profiles_);
   }
 };
 
@@ -1212,59 +1137,6 @@ class ZeCollector {
     }
   }
 
-  inline static std::string GetMetricUnits(const char* units) {
-    PTI_ASSERT(units != nullptr);
-
-    std::string result = units;
-    if (result.find("null") != std::string::npos) {
-      result = "";
-    } else if (result.find("percent") != std::string::npos) {
-      result = "%";
-    }
-
-    return result;
-  }
-
-  static uint32_t GetMetricCount(zet_metric_group_handle_t group) {
-    PTI_ASSERT(group != nullptr);
-
-    zet_metric_group_properties_t group_props{};
-    group_props.stype = ZET_STRUCTURE_TYPE_METRIC_GROUP_PROPERTIES;
-    ze_result_t status = zetMetricGroupGetProperties(group, &group_props);
-    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-
-    return group_props.metricCount;
-  }
-
-  static std::vector<std::string> GetMetricNames(zet_metric_group_handle_t group) {
-    PTI_ASSERT(group != nullptr);
-
-    uint32_t metric_count = GetMetricCount(group);
-    PTI_ASSERT(metric_count > 0);
-
-    std::vector<zet_metric_handle_t> metrics(metric_count);
-    ze_result_t status = zetMetricGet(group, &metric_count, metrics.data());
-    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-    PTI_ASSERT(metric_count == metrics.size());
-
-    std::vector<std::string> names;
-    for (auto metric : metrics) {
-      zet_metric_properties_t metric_props{
-          ZET_STRUCTURE_TYPE_METRIC_PROPERTIES, };
-      status = zetMetricGetProperties(metric, &metric_props);
-      PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-
-      std::string units = GetMetricUnits(metric_props.resultUnits);
-      std::string name = metric_props.name;
-      if (!units.empty()) {
-        name += "[" + units + "]";
-      }
-      names.push_back(name);
-    }
-
-    return names;
-  }
-
   void DumpKernelProfiles(void) { // TODO
     ze_device_handle_t device = nullptr;
     int did = -1;
@@ -1322,39 +1194,6 @@ class ZeCollector {
   }
 
  private: // Callbacks
-
-  static void OnEnterEventPoolCreate(ze_event_pool_create_params_t *params, void *global_data, void **instance_data) {
-    const ze_event_pool_desc_t* desc = *(params->pdesc);
-    if (desc == nullptr) {
-      return;
-    }
-    if (desc->flags & ZE_EVENT_POOL_FLAG_IPC) {
-      return;
-    }
-
-    ze_event_pool_desc_t* profiling_desc = new ze_event_pool_desc_t;
-    UniMemory::ExitIfOutOfMemory((void *)(profiling_desc));
-    PTI_ASSERT(profiling_desc != nullptr);
-    profiling_desc->stype = desc->stype;
-    profiling_desc->pNext = desc->pNext;
-    profiling_desc->flags = desc->flags;
-    profiling_desc->flags |= ZE_EVENT_POOL_FLAG_KERNEL_TIMESTAMP;
-    profiling_desc->flags |= ZE_EVENT_POOL_FLAG_HOST_VISIBLE;
-    profiling_desc->count = desc->count;
-    
-    *(params->pdesc) = profiling_desc;
-    *instance_data = profiling_desc;
-  }
-
-  static void OnExitEventPoolCreate(ze_event_pool_create_params_t *params,
-                                    ze_result_t result,
-                                    void *global_data,
-                                    void **instance_data) {
-    ze_event_pool_desc_t* desc = static_cast<ze_event_pool_desc_t*>(*instance_data);
-    if (desc != nullptr) {
-      delete desc;
-    }
-  }
 
   static void OnExitModuleCreate(ze_module_create_params_t* params, ze_result_t result, void* global_data, void** instance_user_data) { // TODO
     if (result == ZE_RESULT_SUCCESS) {
