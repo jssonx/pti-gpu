@@ -825,14 +825,6 @@ struct ZeDevice {
 static std::shared_mutex devices_mutex_;
 static std::map<ze_device_handle_t, ZeDevice> *devices_;
 
-struct ZeCommandQueue {
-  ze_command_queue_handle_t queue_;
-  ze_context_handle_t context_;
-  ze_device_handle_t device_;
-  uint32_t engine_ordinal_;
-  uint32_t engine_index_;
-};
-
 struct ZeCommandList {
   ze_command_list_handle_t cmdlist_;
   ze_context_handle_t context_;
@@ -1329,43 +1321,6 @@ class ZeCollector {
     }
   }
 
-
-  inline uint64_t ComputeDuration(uint64_t start, uint64_t end, uint64_t freq, uint64_t mask) {
-    uint64_t duration = 0;
-    if (start <= end) {
-      duration = (end - start) * static_cast<uint64_t>(NSEC_IN_SEC) / freq;
-    } else { // Timer Overflow
-      duration = (mask - start + 1 + end) * static_cast<uint64_t>(NSEC_IN_SEC) / freq;
-    }
-    return duration;
-  }
-
-  inline void GetHostTime(const ZeCommand *command, const ze_kernel_timestamp_result_t& ts, uint64_t& start, uint64_t& end) {
-    uint64_t device_freq = command->device_timer_frequency_;
-    uint64_t device_mask = command->device_timer_mask_;
-
-    uint64_t device_start = ts.global.kernelStart & device_mask;
-    uint64_t device_end = ts.global.kernelEnd & device_mask;
-
-    uint64_t device_submit_time = (command->submit_time_device_ & device_mask);
-
-    uint64_t time_shift;
-
-    if (device_start > device_submit_time) {
-      time_shift = (device_start - device_submit_time) * NSEC_IN_SEC / device_freq;
-    }
-    else {
-      // overflow
-      time_shift = (device_mask - device_submit_time + 1 + device_start) * NSEC_IN_SEC / device_freq;
-    }
-
-    uint64_t duration = ComputeDuration(device_start, device_end, device_freq, device_mask);
-
-    start = command->submit_time_ + time_shift;
-    end = start + duration;
-  }
-
-
  private: // Callbacks
 
   static void OnEnterEventPoolCreate(ze_event_pool_create_params_t *params, void *global_data, void **instance_data) {
@@ -1570,9 +1525,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
   std::map<ze_image_handle_t, size_t> images_;
 
   ZeEventCache event_cache_;
-  
-  mutable std::shared_mutex command_queues_mutex_;
-  std::map<ze_command_queue_handle_t, ZeCommandQueue> command_queues_;
 
   mutable std::shared_mutex command_lists_mutex_;
   std::map<ze_command_list_handle_t, ZeCommandList *> command_lists_;
