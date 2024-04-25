@@ -62,7 +62,6 @@ if (BUILD_WITH_MPI)
 endif()
 
 add_library(unitrace_tool SHARED
-  "${PROJECT_SOURCE_DIR}/../utils/correlator.cc"
   "${PROJECT_SOURCE_DIR}/src/tracer.cc")
 target_compile_options(unitrace_tool PRIVATE -g -O0)
 link_directories(${ONEAPI_COMPILER_HOME}/lib)

@@ -25,7 +25,6 @@
 #include <level_zero/ze_api.h>
 #include <level_zero/layers/zel_tracing_api.h>
 
-#include "correlator.h" // utils
 #include "utils.h" // utils
 #include "ze_utils.h" // utils
 #include "collector_options.h"
@@ -155,18 +154,15 @@ class ZeCollector {
  public: // Interface
 
   static ZeCollector* Create(
-      Correlator* correlator,
       CollectorOptions options) {
     ze_api_version_t version = utils::ze::GetVersion();
     PTI_ASSERT(
         ZE_MAJOR_VERSION(version) >= 1 &&
         ZE_MINOR_VERSION(version) >= 2);
 
-    PTI_ASSERT(correlator != nullptr);
-
     std::string data_dir_name = utils::GetEnv("UNITRACE_DataDir");
     ZeCollector* collector = new ZeCollector(
-        correlator, options, data_dir_name);
+        options, data_dir_name);
 
     UniMemory::ExitIfOutOfMemory((void *)(collector));
 
@@ -218,11 +214,9 @@ class ZeCollector {
  private: // Implementation
 
   ZeCollector(
-      Correlator* correlator,
       CollectorOptions options,
       std::string& data_dir_name)
-      : correlator_(correlator),
-        options_(options) {
+      : options_(options) {
     data_dir_name_ = data_dir_name;
     EnumerateAndSetupDevices();
     InitializeKernelCommandProperties();
@@ -568,7 +562,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
  private: // Data
   zel_tracer_handle_t tracer_ = nullptr;
   CollectorOptions options_;
-  Correlator* correlator_ = nullptr;
   std::string data_dir_name_;
 };
 

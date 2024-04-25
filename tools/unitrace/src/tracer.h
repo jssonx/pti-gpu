@@ -56,7 +56,7 @@ class UniTracer {
 
     if (collector_options.kernel_tracing || collector_options.api_tracing) {
 
-      ze_collector = ZeCollector::Create(&tracer->correlator_, collector_options);
+      ze_collector = ZeCollector::Create(collector_options);
       if (ze_collector == nullptr) {
         std::cerr <<
           "[WARNING] Unable to create kernel collector for L0 backend" <<
@@ -69,7 +69,6 @@ class UniTracer {
   }
 
   ~UniTracer() {
-    total_execution_time_ = correlator_.GetTimestamp();
 
     if (ze_collector_ != nullptr) {
       ze_collector_->DisableTracing();
@@ -91,15 +90,12 @@ class UniTracer {
 
  private:
   UniTracer(const TraceOptions& options)
-      : options_(options),
-        correlator_(options.GetLogFileName(),
-          CheckOption(TRACE_CONDITIONAL_COLLECTION)) {
+      : options_(options) {
   }
 
  private:
   TraceOptions options_;
 
-  Correlator correlator_;
   uint64_t total_execution_time_ = 0;
 
   ZeCollector* ze_collector_ = nullptr;

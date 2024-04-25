@@ -341,7 +341,6 @@ def gen_enter_callback(f, func, params, enum_map):
     f.write("    " + cb + "(params, global_user_data, instance_user_data); \n")
     f.write("  }\n")
     f.write("\n")
-  f.write("  PTI_ASSERT(collector->correlator_ != nullptr);\n")
   f.write("\n")
   f.write("  if (!UniController::IsCollectionEnabled()) {\n")
   f.write("    ze_instance_data.start_time_host = 0; \n")
@@ -612,7 +611,6 @@ def gen_enter_callback(f, func, params, enum_map):
           f.write("      str += std::to_string((*(params->p" + name + "))->flags) + \"}\";\n")
           f.write("    }\n")
   f.write("    str += \"\\n\";\n")
-  f.write("    collector->correlator_->Log(str);\n")
   f.write("  }\n")
   
   f.write("  uint64_t start_time_host = 0;\n")
@@ -637,7 +635,6 @@ def gen_exit_callback(f, func, params, enum_map):
     
     f.write("\n")
 
-  f.write("  PTI_ASSERT(collector->correlator_ != nullptr);\n")
   f.write("\n")
   f.write("  if (!UniController::IsCollectionEnabled()) {\n")
   f.write("      return;\n")
