@@ -46,33 +46,6 @@ struct ZeInstanceData {
 
 thread_local ZeInstanceData ze_instance_data;
 
-struct ZeFunctionTime {
-  uint64_t total_time_;
-  uint64_t min_time_;
-  uint64_t max_time_;
-  uint64_t call_count_;
-
-  bool operator>(const ZeFunctionTime& r) const {
-    if (total_time_ != r.total_time_) {
-      return total_time_ > r.total_time_;
-    }
-    return call_count_ > r.call_count_;
-  }
-
-  bool operator!=(const ZeFunctionTime& r) const {
-    if (total_time_ == r.total_time_) {
-      return call_count_ != r.call_count_;
-    }
-    return true;
-  }
-};
-
-struct ZeKernelGroupSize {
-  uint32_t x;
-  uint32_t y;
-  uint32_t z;
-};
-
 enum ZeKernelCommandType {
   KERNEL_COMMAND_TYPE_INVALID = 0,
   KERNEL_COMMAND_TYPE_COMPUTE = 1,
@@ -353,7 +326,6 @@ struct ZeCommand {
   uint64_t mem_size_;	// memory copy/fill size
   uint32_t engine_ordinal_;
   uint32_t engine_index_;
-  ZeKernelGroupSize group_size_;
   ze_group_count_t group_count_;
   ZeKernelCommandType type_;	
   bool implicit_scaling_;
@@ -372,7 +344,6 @@ struct ZeKernelCommandProperties {
   uint32_t slmsize_;	// SLM size
   uint32_t private_mem_size_;	// private memory size for each thread
   uint32_t spill_mem_size_;	// spill memory size for each thread
-  ZeKernelGroupSize group_size_;	// group size
   ZeKernelCommandType type_;
   uint32_t regsize_;	// GRF size per thread
   bool aot_;		// AOT or JIT
@@ -436,49 +407,7 @@ typedef void (*OnZeFunctionFinishCallback)(std::vector<uint64_t> *kids, FLOW_DIR
 
 typedef void (*OnZeKernelFinishCallback)(uint64_t kid, uint64_t tid, uint64_t start, uint64_t end, uint32_t ordinal, uint32_t index, int32_t tile, const ze_device_handle_t device, const uint64_t kernel_command_id, bool implicit_scaling, const ze_group_count_t& group_count, size_t mem_size);
 
-ze_result_t (*zexKernelGetBaseAddress)(ze_kernel_handle_t hKernel, uint64_t *baseAddress) = nullptr;
-
-inline std::string GetZeKernelCommandName(uint64_t id, const ze_group_count_t& group_count, size_t size, bool detailed = true) { // TODO
-  std::string str;
-  kernel_command_properties_mutex_.lock_shared();
-  auto it = kernel_command_properties_->find(id);
-  if (it != kernel_command_properties_->end()) {
-    str = "\"" + std::move(utils::Demangle(it->second.name_.c_str()));	// quote kernel name which may contain ","
-    if (detailed) {
-      if (it->second.type_ == KERNEL_COMMAND_TYPE_COMPUTE) {
-        if (it->second.simd_width_ > 0) {
-          str += "[SIMD";
-          if (it->second.simd_width_ == 1) {
-            str += "_ANY";
-          } else {
-            str += std::to_string(it->second.simd_width_);
-          }
-        }
-        str = str + " {" +
-          std::to_string(group_count.groupCountX) + "; " +
-          std::to_string(group_count.groupCountY) + "; " +
-          std::to_string(group_count.groupCountZ) + "} {" +
-          std::to_string(it->second.group_size_.x) + "; " +
-          std::to_string(it->second.group_size_.y) + "; " +
-          std::to_string(it->second.group_size_.z) + "}]";
-      }
-      else if ((it->second.type_ == KERNEL_COMMAND_TYPE_MEMORY) && (size > 0)) {
-        str = str + "[" + std::to_string(size) + "]";
-      }
-    }
-    str += "\"";	// quoate kernel name
-  }
-
-  kernel_command_properties_mutex_.unlock_shared();
-
-  return str;
-}
-
-inline std::string GetZeKernelCommandName(uint64_t id, ze_group_count_t& group_count, size_t size, bool detailed = true) { // TODO
-  const ze_group_count_t& gcount = group_count;
-  return GetZeKernelCommandName(id, gcount, size, detailed);
-}
-
+ze_result_t (*zexKernelGetBaseAddress)(ze_kernel_handle_t hKernel, uint64_t *baseAddress) = nullptr; // TODO
 
 class ZeCollector {
  public: // Interface
@@ -941,8 +870,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       desc.slmsize_ = kprops.localMemSize;
       desc.private_mem_size_ = kprops.privateMemSize;
       desc.spill_mem_size_ = kprops.spillMemSize;
-      ZeKernelGroupSize group_size{kprops.requiredGroupSizeX, kprops.requiredGroupSizeY, kprops.requiredGroupSizeZ};
-      desc.group_size_ = group_size;
       desc.regsize_ = regsize.registerFileSize;
 
       // for stall sampling
