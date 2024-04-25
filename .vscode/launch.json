@@ -11,7 +11,7 @@
           "/home/users/yuning/pg/qahpct/minitest/intelgpu/single.sycloffload.ipcx/single.sycloffload.icpx.intelgpu"
         ],
         "environment": [],
-        "stopAtEntry": true,
+        "stopAtEntry": false,
         "cwd": "${workspaceFolder}",
         "externalConsole": false,
         "MIMode": "gdb",
