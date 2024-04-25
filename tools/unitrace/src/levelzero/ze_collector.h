@@ -51,31 +51,6 @@ enum ZeKernelCommandType {
   KERNEL_COMMAND_TYPE_COMMAND = 3
 };
 
-static std::mutex global_kernel_profiles_mutex_;
-
-struct ZeCommand {
-  uint64_t kernel_command_id_;	//kernel or command identifier
-  uint64_t instance_id_ = 0;	//unique kernel or command instance identifier
-  ze_event_handle_t event_ = nullptr;
-  ze_device_handle_t device_ = nullptr;
-  uint64_t host_time_origin_;	// in ns
-  uint64_t device_timer_frequency_;
-  uint64_t device_timer_mask_;
-  uint64_t metric_timer_frequency_;
-  uint64_t metric_timer_mask_;
-  uint64_t append_time_ = 0;
-  uint64_t submit_time_ = 0;		//in ns
-  uint64_t submit_time_device_ = 0;	//in ticks
-  uint64_t tid_;
-  uint64_t mem_size_;	// memory copy/fill size
-  uint32_t engine_ordinal_;
-  uint32_t engine_index_;
-  ze_group_count_t group_count_;
-  ZeKernelCommandType type_;	
-  bool implicit_scaling_;
-  bool immediate_;
-};
-
 struct ZeKernelCommandProperties {
   uint64_t id_;		// unique identidier
   uint64_t size_;	// kernel binary size
@@ -177,12 +152,10 @@ class ZeCollector {
   ZeCollector& operator=(const ZeCollector& that) = delete;
 
   ~ZeCollector() {
-
     if (tracer_ != nullptr) {
       ze_result_t status = zelTracerDestroy(tracer_);
       PTI_ASSERT(status == ZE_RESULT_SUCCESS);
     }
-
     DumpKernelProfiles();
   }
 
@@ -243,10 +216,6 @@ class ZeCollector {
             desc.parent_id_ = -1;	// no parent
             desc.parent_device_ = nullptr;
             desc.subdevice_id_ = -1;	// not a subdevice
-            desc.device_timer_frequency_ = utils::ze::GetDeviceTimerFrequency(device);
-            desc.device_timer_mask_ = utils::ze::GetDeviceTimestampMask(device);
-            desc.metric_timer_frequency_ = utils::ze::GetMetricTimerFrequency(device);
-            desc.metric_timer_mask_ = utils::ze::GetMetricTimestampMask(device);
 
             ze_pci_ext_properties_t pci_device_properties;
             ze_result_t status = zeDevicePciGetPropertiesExt(device, &pci_device_properties);
@@ -260,18 +229,7 @@ class ZeCollector {
             PTI_ASSERT(status == ZE_RESULT_SUCCESS);
 
             desc.num_subdevices_ = num_sub_devices;
-
-            desc.metric_group_ = nullptr;
             
-
-            uint64_t host_time;
-            uint64_t ticks;
-
-            status = zeDeviceGetGlobalTimestamps(device, &host_time, &ticks);
-            PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-
-            desc.host_time_origin_ = host_time;
-
             devices_->insert({device, std::move(desc)});
 
             if (num_sub_devices > 0) {
@@ -289,26 +247,13 @@ class ZeCollector {
                 sub_desc.num_subdevices_ = 0;
                 sub_desc.subdevice_id_ = j;
                 sub_desc.id_ = did;	// take parent device's id
-                sub_desc.device_timer_frequency_ = utils::ze::GetDeviceTimerFrequency(sub_devices[j]);
-                sub_desc.device_timer_mask_ = utils::ze::GetDeviceTimestampMask(sub_devices[j]);
-                sub_desc.metric_timer_frequency_ = utils::ze::GetMetricTimerFrequency(sub_devices[j]);
-                sub_desc.metric_timer_mask_ = utils::ze::GetMetricTimestampMask(sub_devices[j]);
   
                 ze_pci_ext_properties_t pci_device_properties;
                 ze_result_t status = zeDevicePciGetPropertiesExt(sub_devices[j], &pci_device_properties);
                 PTI_ASSERT(status == ZE_RESULT_SUCCESS);
                 sub_desc.pci_properties_ = pci_device_properties;
-  
-                uint64_t ticks;
-                uint64_t host_time;
-                status = zeDeviceGetGlobalTimestamps(sub_devices[j], &host_time, &ticks);
-                PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-
-                sub_desc.host_time_origin_ = host_time;
-  
+    
                 sub_desc.driver_ = driver;
-
-                sub_desc.metric_group_ = nullptr;
 
                 devices_->insert({sub_devices[j], std::move(sub_desc)});
               }

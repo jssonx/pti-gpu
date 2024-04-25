@@ -16,11 +16,6 @@ static TraceOptions ReadArgs() {
   uint32_t flags = 0;
   std::string log_file;
 
-  value = utils::GetEnv("UNITRACE_HostTiming");
-  if (!value.empty() && value == "1") {
-    flags |= (1 << TRACE_HOST_TIMING);
-  }
-
   value = utils::GetEnv("UNITRACE_DeviceTiming");
   if (!value.empty() && value == "1") {
     flags |= (1 << TRACE_DEVICE_TIMING);
