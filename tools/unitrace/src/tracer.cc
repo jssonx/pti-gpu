@@ -7,7 +7,6 @@
 #include <iostream>
 
 #include "tracer.h"
-#include "unitimer.h"
 
 static UniTracer* tracer = nullptr;
 
@@ -36,7 +35,6 @@ void __attribute__((constructor)) Init(void) {
   }
 
   if (!tracer) {
-    UniTimer::StartUniTimer();
     tracer = UniTracer::Create(ReadArgs());
   }
 }

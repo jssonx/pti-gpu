@@ -29,8 +29,6 @@
 #include "ze_utils.h"
 #include "collector_options.h"
 #include "unikernel.h"
-#include "unitimer.h"
-#include "unicontrol.h"
 #include "unimemory.h"
 
 #include "common_header.h"
@@ -456,7 +454,52 @@ typedef struct _zex_kernel_register_file_size_exp_t {
     }
   }
 
-  #include <tracing.h> // Auto-generated callbacks
+  static void zeModuleCreateOnExit(
+      ze_module_create_params_t* params,
+      ze_result_t result,
+      void* global_user_data,
+      void** instance_user_data) {
+    ZeCollector* collector =
+      reinterpret_cast<ZeCollector*>(global_user_data);
+    OnExitModuleCreate(params, result, global_user_data, instance_user_data); 
+  }
+
+  static void zeModuleDestroyOnEnter(
+      ze_module_destroy_params_t* params,
+      ze_result_t result,
+      void* global_user_data,
+      void** instance_user_data) {
+    ZeCollector* collector =
+      reinterpret_cast<ZeCollector*>(global_user_data);
+    OnEnterModuleDestroy(params, global_user_data, instance_user_data); 
+  }
+
+  static void zeKernelCreateOnExit(
+      ze_kernel_create_params_t* params,
+      ze_result_t result,
+      void* global_user_data,
+      void** instance_user_data) {
+    ZeCollector* collector =
+      reinterpret_cast<ZeCollector*>(global_user_data);
+    OnExitKernelCreate(params, result, global_user_data, instance_user_data); 
+  }
+
+  void EnableTracing(zel_tracer_handle_t tracer) {
+    zet_core_callbacks_t prologue = {};
+    zet_core_callbacks_t epilogue = {};
+
+    epilogue.Module.pfnCreateCb = zeModuleCreateOnExit;
+    prologue.Module.pfnDestroyCb = zeModuleDestroyOnEnter;
+    epilogue.Kernel.pfnCreateCb = zeKernelCreateOnExit;
+
+    ze_result_t status = ZE_RESULT_SUCCESS;
+    status = zelTracerSetPrologues(tracer, &prologue);
+    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
+    status = zelTracerSetEpilogues(tracer, &epilogue);
+    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
+    status = zelTracerSetEnabled(tracer, true);
+    PTI_ASSERT(status == ZE_RESULT_SUCCESS);
+  }
 
  private: // Data
   zel_tracer_handle_t tracer_ = nullptr;
