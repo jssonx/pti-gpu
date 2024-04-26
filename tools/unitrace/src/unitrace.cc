@@ -55,6 +55,15 @@ int ParseArgs(int argc, char* argv[]) {
       }
       utils::SetEnv("UNITRACE_SamplingInterval", argv[i]);
       app_index += 2;
+    } else if (strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0) {
+      utils::SetEnv("UNITRACE_LogToFile", "1");
+      ++i;
+      if (i >= argc) {
+        std::cerr << "[ERROR] Log file name is not specified" << std::endl;
+        return -1;
+      }
+      utils::SetEnv("UNITRACE_LogFilename", argv[i]);
+      app_index += 2;
     } else {
       break;
     }
