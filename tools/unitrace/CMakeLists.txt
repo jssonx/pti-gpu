@@ -81,10 +81,6 @@ endif()
 FindL0Library(unitrace_tool)
 FindL0Headers(unitrace_tool)
 
-FindHeadersPath(unitrace_tool "${PROJECT_SOURCE_DIR}/scripts/gen_tracing_common_header.py" "common_header.gen" gen_common_header)
-FindHeadersPath(unitrace_tool "${PROJECT_SOURCE_DIR}/scripts/gen_tracing_callbacks.py" "tracing.gen" gen_tracing_header)
-
-
 target_include_directories(unitrace_tool PRIVATE "${L0_INC_PATH}")
 
 # Loader
@@ -109,13 +105,6 @@ if(UNIX)
 endif()
 FindL0Library(unitrace)
 FindL0Headers(unitrace)
-
-# Clearning files only for release build, for any other build types lets skip deletion for better debuggability
-string(TOLOWER "${CMAKE_BUILD_TYPE}" LOWER_CMAKE_BUILD_TYPE)
-if(NOT LOWER_CMAKE_BUILD_TYPE STREQUAL "debug")
-  add_custom_command(TARGET unitrace_tool POST_BUILD COMMAND "rm" "-rf" "tracing.gen")
-  add_custom_command(TARGET unitrace_tool POST_BUILD COMMAND "rm" "-rf" "common_header.gen")
-endif()
 
 configure_file(${PROJECT_SOURCE_DIR}/scripts/mergetrace.py mergetrace.py COPYONLY)
 

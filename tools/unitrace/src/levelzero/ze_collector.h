@@ -33,7 +33,7 @@
 #include "unicontrol.h"
 #include "unimemory.h"
 
-#include "common_header.gen"
+#include "common_header.h"
 
 struct ZeInstanceData {
   uint64_t start_time_host;	// in ns
@@ -456,7 +456,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
     }
   }
 
-  #include <tracing.gen> // Auto-generated callbacks
+  #include <tracing.h> // Auto-generated callbacks
 
  private: // Data
   zel_tracer_handle_t tracer_ = nullptr;
