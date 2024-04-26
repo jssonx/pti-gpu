@@ -33,35 +33,12 @@
 
 #include "common_header.h"
 
-struct ZeInstanceData {
-  uint64_t start_time_host;	// in ns
-  uint64_t timestamp_host;	// in ns
-  uint64_t timestamp_device;	// in ticks
-  uint64_t kid;	// passing kid from enter callback to exit callback
-};
-
-thread_local ZeInstanceData ze_instance_data;
-
-enum ZeKernelCommandType {
-  KERNEL_COMMAND_TYPE_INVALID = 0,
-  KERNEL_COMMAND_TYPE_COMPUTE = 1,
-  KERNEL_COMMAND_TYPE_MEMORY = 2,
-  KERNEL_COMMAND_TYPE_COMMAND = 3
-};
-
 struct ZeKernelCommandProperties {
   uint64_t id_;		// unique identidier
   uint64_t size_;	// kernel binary size
   uint64_t base_addr_;	// kernel base address
   ze_device_handle_t device_;
   int32_t device_id_;
-  uint32_t simd_width_;	// SIMD
-  uint32_t nargs_;	// number of kernel arguments
-  uint32_t nsubgrps_;	// maximal number of subgroups
-  uint32_t slmsize_;	// SLM size
-  uint32_t private_mem_size_;	// private memory size for each thread
-  uint32_t spill_mem_size_;	// spill memory size for each thread
-  ZeKernelCommandType type_;
   uint32_t regsize_;	// GRF size per thread
   bool aot_;		// AOT or JIT
   std::string name_;	// kernel or command name
@@ -83,18 +60,11 @@ static std::map<ze_module_handle_t, ZeModule> modules_on_devices_; //module to Z
 struct ZeDevice {
   ze_device_handle_t device_;
   ze_device_handle_t parent_device_;
-  uint64_t host_time_origin_;	// in ns
-  uint64_t device_timer_frequency_;
-  uint64_t device_timer_mask_;
-  uint64_t metric_timer_frequency_;
-  uint64_t metric_timer_mask_;
   ze_driver_handle_t driver_;
-  zet_metric_group_handle_t metric_group_;
   int32_t id_;
   int32_t parent_id_;
   int32_t subdevice_id_;
   int32_t num_subdevices_;
-  ze_pci_ext_properties_t pci_properties_;
 };
 
 // these will no go away when ZeCollector is destructed
@@ -214,12 +184,6 @@ class ZeCollector {
             desc.parent_id_ = -1;	// no parent
             desc.parent_device_ = nullptr;
             desc.subdevice_id_ = -1;	// not a subdevice
-
-            ze_pci_ext_properties_t pci_device_properties;
-            ze_result_t status = zeDevicePciGetPropertiesExt(device, &pci_device_properties);
-            PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-            desc.pci_properties_ = pci_device_properties;
-
             desc.driver_ = driver;
 
             uint32_t num_sub_devices = 0;
@@ -245,12 +209,6 @@ class ZeCollector {
                 sub_desc.num_subdevices_ = 0;
                 sub_desc.subdevice_id_ = j;
                 sub_desc.id_ = did;	// take parent device's id
-  
-                ze_pci_ext_properties_t pci_device_properties;
-                ze_result_t status = zeDevicePciGetPropertiesExt(sub_devices[j], &pci_device_properties);
-                PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-                sub_desc.pci_properties_ = pci_device_properties;
-    
                 sub_desc.driver_ = driver;
 
                 devices_->insert({sub_devices[j], std::move(sub_desc)});
@@ -264,66 +222,55 @@ class ZeCollector {
   }
 
   void DumpKernelProfiles(void) {
-    ze_device_handle_t device = nullptr;
-    int did = -1;
-    zet_metric_group_handle_t group = nullptr;
-    std::vector<std::string> metric_names;
-
-    if (options_.stall_sampling) {
-      kernel_command_properties_mutex_.lock();
-      std::map<int32_t, std::map<uint64_t, ZeKernelCommandProperties *>> device_kprops; // sorted by device id then base address;
-      for (auto it = kernel_command_properties_->begin(); it != kernel_command_properties_->end(); it++) {
-        if (it->second.type_ != KERNEL_COMMAND_TYPE_COMPUTE) {
+    kernel_command_properties_mutex_.lock();
+    std::map<int32_t, std::map<uint64_t, ZeKernelCommandProperties *>> device_kprops; // sorted by device id then base address;
+    for (auto it = kernel_command_properties_->begin(); it != kernel_command_properties_->end(); it++) {
+      auto dkit = device_kprops.find(it->second.device_id_);
+      if (dkit == device_kprops.end()) {
+        std::map<uint64_t, ZeKernelCommandProperties *> kprops;
+        kprops.insert({it->second.base_addr_, &(it->second)});
+        device_kprops.insert({it->second.device_id_, std::move(kprops)});
+      }
+      else {
+        if (dkit->second.find(it->second.base_addr_) != dkit->second.end()) {
+          // already inserted
           continue;
         }
-        auto dkit = device_kprops.find(it->second.device_id_);
-        if (dkit == device_kprops.end()) {
-          std::map<uint64_t, ZeKernelCommandProperties *> kprops;
-          kprops.insert({it->second.base_addr_, &(it->second)});
-          device_kprops.insert({it->second.device_id_, std::move(kprops)});
+        dkit->second.insert({it->second.base_addr_, &(it->second)});
+      }
+    }
+
+    for (auto& props : device_kprops) {
+      // kernel properties file path: data_dir/.kprops.<device_id>.<pid>.txt
+      std::string fpath = data_dir_name_ + "/.kprops."  + std::to_string(props.first) + "." + std::to_string(utils::GetPid()) + ".txt";
+      std::ofstream kpfs = std::ofstream(fpath, std::ios::out | std::ios::trunc);
+      uint64_t prev_base = 0;
+      for (auto it = props.second.crbegin(); it != props.second.crend(); it++) {
+        // quote kernel name which may contain "," 
+        kpfs << "\"" << utils::Demangle(it->second->name_.c_str()) << "\"" << std::endl;
+        kpfs << it->second->base_addr_ << std::endl;
+        if (prev_base == 0) {
+          kpfs << it->second->size_ << std::endl;
         }
         else {
-          if (dkit->second.find(it->second.base_addr_) != dkit->second.end()) {
-            // already inserted
-            continue;
+          size_t size = prev_base - it->second->base_addr_;
+          if (size > it->second->size_) {
+            size = it->second->size_;
           }
-          dkit->second.insert({it->second.base_addr_, &(it->second)});
+          kpfs << size << std::endl;
         }
+        prev_base = it->second->base_addr_;
       }
-
-      for (auto& props : device_kprops) {
-        // kernel properties file path: data_dir/.kprops.<device_id>.<pid>.txt
-        std::string fpath = data_dir_name_ + "/.kprops."  + std::to_string(props.first) + "." + std::to_string(utils::GetPid()) + ".txt";
-        std::ofstream kpfs = std::ofstream(fpath, std::ios::out | std::ios::trunc);
-        uint64_t prev_base = 0;
-        for (auto it = props.second.crbegin(); it != props.second.crend(); it++) {
-          // quote kernel name which may contain "," 
-          kpfs << "\"" << utils::Demangle(it->second->name_.c_str()) << "\"" << std::endl;
-          kpfs << it->second->base_addr_ << std::endl;
-          if (prev_base == 0) {
-            kpfs << it->second->size_ << std::endl;
-          }
-          else {
-            size_t size = prev_base - it->second->base_addr_;
-            if (size > it->second->size_) {
-              size = it->second->size_;
-            }
-            kpfs << size << std::endl;
-          }
-          prev_base = it->second->base_addr_;
-        }
-        kpfs.close();
-      }
-
-      kernel_command_properties_mutex_.unlock();
+      kpfs.close();
     }
+
+    kernel_command_properties_mutex_.unlock();
   }
 
  private: // Callbacks
 
-  static void OnExitModuleCreate(ze_module_create_params_t* params, ze_result_t result, void* global_data, void** instance_user_data) {
+  static void OnExitModuleCreate(ze_module_create_params_t* params, ze_result_t result, void* global_data) {
     if (result == ZE_RESULT_SUCCESS) {
-      ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
       ze_module_handle_t mod = **(params->pphModule);
       ze_device_handle_t device = *(params->phDevice);
       size_t binary_size;
@@ -343,8 +290,7 @@ class ZeCollector {
     }
   }
 
-  static void OnEnterModuleDestroy(ze_module_destroy_params_t* params, void* global_data, void** instance_user_data) {
-    ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
+  static void OnEnterModuleDestroy(ze_module_destroy_params_t* params, void* global_data) {
     ze_module_handle_t mod = *(params->phModule);
     modules_on_devices_mutex_.lock();
     modules_on_devices_.erase(mod);
@@ -362,7 +308,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
 
 #endif /* !defined(ZEX_STRUCTURE_KERNEL_REGISTER_FILE_SIZE_EXP) */
 
-  static void OnExitKernelCreate(ze_kernel_create_params_t *params, ze_result_t result, void* global_data, void** instance_user_data) {
+  static void OnExitKernelCreate(ze_kernel_create_params_t *params, ze_result_t result, void* global_data) {
     if (result == ZE_RESULT_SUCCESS) {
       ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
       ze_kernel_handle_t kernel = **(params->pphKernel);
@@ -393,7 +339,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
 
       ZeKernelCommandProperties desc;
 
-      desc.type_ = KERNEL_COMMAND_TYPE_COMPUTE;
       desc.aot_ = aot;
 
       ze_result_t status;
@@ -428,12 +373,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
 
       status = zeKernelGetProperties(kernel, &kprops);
       PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-      desc.simd_width_ = kprops.maxSubgroupSize;
-      desc.nargs_ = kprops.numKernelArgs;
-      desc.nsubgrps_ = kprops.maxNumSubgroups;
-      desc.slmsize_ = kprops.localMemSize;
-      desc.private_mem_size_ = kprops.privateMemSize;
-      desc.spill_mem_size_ = kprops.spillMemSize;
       desc.regsize_ = regsize.registerFileSize;
 
       // for stall sampling
@@ -459,9 +398,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       ze_result_t result,
       void* global_user_data,
       void** instance_user_data) {
-    ZeCollector* collector =
-      reinterpret_cast<ZeCollector*>(global_user_data);
-    OnExitModuleCreate(params, result, global_user_data, instance_user_data); 
+    OnExitModuleCreate(params, result, global_user_data); 
   }
 
   static void zeModuleDestroyOnEnter(
@@ -469,9 +406,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       ze_result_t result,
       void* global_user_data,
       void** instance_user_data) {
-    ZeCollector* collector =
-      reinterpret_cast<ZeCollector*>(global_user_data);
-    OnEnterModuleDestroy(params, global_user_data, instance_user_data); 
+    OnEnterModuleDestroy(params, global_user_data); 
   }
 
   static void zeKernelCreateOnExit(
@@ -479,9 +414,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       ze_result_t result,
       void* global_user_data,
       void** instance_user_data) {
-    ZeCollector* collector =
-      reinterpret_cast<ZeCollector*>(global_user_data);
-    OnExitKernelCreate(params, result, global_user_data, instance_user_data); 
+    OnExitKernelCreate(params, result, global_user_data); 
   }
 
   void EnableTracing(zel_tracer_handle_t tracer) {
