@@ -9,3 +9,4 @@ CMakeUserPresets.json
 error_diff.txt
 *.swp
 result.txt
+unitrace.metrics.*

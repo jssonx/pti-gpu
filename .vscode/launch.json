@@ -5,9 +5,11 @@
         "name": "Debug unitrace with gdb-oneapi",
         "type": "cppdbg",
         "request": "launch",
-        "program": "/storage/users/yuning/pg/ra/pti-gpu/tools/unitrace/build/unitrace",
+        "program": "~/pg/ra/pti-gpu/unitrace/build/unitrace",
         "args": [
           "--stall-sampling",
+          "-o",
+          "~/pg/ra/pti-gpu/unitrace",
           "/home/users/yuning/pg/qahpct/minitest/intelgpu/single.sycloffload.ipcx/single.sycloffload.icpx.intelgpu"
         ],
         "environment": [],
