@@ -106,8 +106,6 @@ endif()
 FindL0Library(unitrace)
 FindL0Headers(unitrace)
 
-configure_file(${PROJECT_SOURCE_DIR}/scripts/mergetrace.py mergetrace.py COPYONLY)
-
 # Installation
 
 install(TARGETS unitrace unitrace_tool DESTINATION bin)
