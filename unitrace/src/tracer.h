@@ -15,7 +15,6 @@
 #include <sstream>
 #include <string>
 
-#include "utils.h"
 #include "ze_collector.h"
 #include "unimemory.h"
 

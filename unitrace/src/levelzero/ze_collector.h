@@ -29,6 +29,7 @@
 #include "ze_utils.h"
 #include "unikernel.h"
 #include "unimemory.h"
+#include "demangle.h"
 
 
 struct ZeKernelCommandProperties {
