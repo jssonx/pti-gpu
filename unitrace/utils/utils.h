@@ -42,60 +42,6 @@
 
 namespace utils {
 
-struct DeviceUUID {
-  uint16_t vendorID;
-  uint16_t deviceID;
-  uint16_t revisionID;
-  uint16_t pciDomain;
-  uint8_t pciBus;
-  uint8_t pciDevice;
-  uint8_t pciFunction;
-  uint8_t reserved[4];
-  uint8_t subDeviceId;
-};
-
-struct Comparator {
-  template<typename T>
-  bool operator()(const T& left, const T& right) const {
-    if (left.second != right.second) {
-      return left.second > right.second;
-    }
-    return left.first > right.first;
-  }
-};
-
-template<typename T>
-struct ComparatorPciAddress {
-  bool operator()(const T& left, const T& right) const {
-    if (left.BusNumber != right.BusNumber) {
-        return (left.BusNumber < right.BusNumber);
-    }
-    if (left.DeviceNumber != right.DeviceNumber) {
-        return (left.DeviceNumber < right.DeviceNumber);
-    }
-    return left.FunctionNumber < right.FunctionNumber;
-  }
-};
-
-#if defined(__gnu_linux__)
-
-inline uint64_t GetTime(clockid_t id) {
-  timespec ts{0};
-  int status = clock_gettime(id, &ts);
-  PTI_ASSERT(status == 0);
-  return ts.tv_sec * NSEC_IN_SEC + ts.tv_nsec;
-}
-
-inline uint64_t ConvertClockMonotonicToRaw(uint64_t clock_monotonic) {
-  uint64_t raw = GetTime(CLOCK_MONOTONIC_RAW);
-  uint64_t monotonic = GetTime(CLOCK_MONOTONIC);
-  return (raw > monotonic) ?
-    clock_monotonic + (raw - monotonic) :
-    clock_monotonic - (monotonic - raw);
-}
-
-#endif
-
 inline std::string GetFilePath(const std::string& filename) {
   PTI_ASSERT(!filename.empty());
 
@@ -117,38 +63,6 @@ inline std::string GetExecutablePath() {
   PTI_ASSERT(status > 0);
 #endif
   return GetFilePath(buffer);
-}
-
-inline std::string GetExecutableName() {
-  char buffer[MAX_STR_SIZE] = { 0 };
-#if defined(_WIN32)
-  DWORD status = GetModuleFileNameA(nullptr, buffer, MAX_STR_SIZE);
-  PTI_ASSERT(status > 0);
-#else
-  ssize_t status = readlink("/proc/self/exe", buffer, MAX_STR_SIZE);
-  PTI_ASSERT(status > 0);
-#endif
-  std::string path(buffer);
-  return path.substr(path.find_last_of("/\\") + 1);
-}
-
-inline std::vector<uint8_t> LoadBinaryFile(const std::string& path) {
-  std::vector<uint8_t> binary;
-  std::ifstream stream(path, std::ios::in | std::ios::binary);
-  if (!stream.good()) {
-    return binary;
-  }
-
-  stream.seekg(0, std::ifstream::end);
-  size_t size = stream.tellg();
-  stream.seekg(0, std::ifstream::beg);
-  if (size == 0) {
-    return binary;
-  }
-
-  binary.resize(size);
-  stream.read(reinterpret_cast<char *>(binary.data()), size);
-  return binary;
 }
 
 inline void SetEnv(const char* name, const char* value) {
@@ -204,48 +118,6 @@ inline uint32_t GetTid() {
   #error "SYS_gettid is unavailable on this system"
 #endif
 #endif
-}
-
-inline uint64_t GetSystemTime() {
-#if defined(_WIN32)
-  LARGE_INTEGER ticks{0};
-  LARGE_INTEGER frequency{0};
-  BOOL status = QueryPerformanceFrequency(&frequency);
-  PTI_ASSERT(status != 0);
-  status = QueryPerformanceCounter(&ticks);
-  PTI_ASSERT(status != 0);
-  return ticks.QuadPart * (NSEC_IN_SEC / frequency.QuadPart);
-#else
-  return GetTime(CLOCK_MONOTONIC_RAW);
-#endif
-}
-
-inline size_t LowerBound(const std::vector<uint64_t>& data, uint64_t value) {
-  size_t start = 0;
-  size_t end = data.size();
-  while (start < end) {
-    size_t middle = (start + end) / 2;
-    if (value <= data[middle]) {
-      end = middle;
-    } else {
-      start = middle + 1;
-    }
-  }
-  return start;
-}
-
-inline size_t UpperBound(const std::vector<uint64_t>& data, uint64_t value) {
-  size_t start = 0;
-  size_t end = data.size();
-  while (start < end) {
-    size_t middle = (start + end) / 2;
-    if (value >= data[middle]) {
-      start = middle + 1;
-    } else {
-      end = middle;
-    }
-  }
-  return start;
 }
 
 } // namespace utils

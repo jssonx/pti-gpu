@@ -54,8 +54,6 @@ class UniTracer {
   UniTracer(){}
 
  private:
-  uint64_t total_execution_time_ = 0;
-
   ZeCollector* ze_collector_ = nullptr;
 };
 
