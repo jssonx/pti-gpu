@@ -30,35 +30,15 @@ class UniTracer {
     UniTracer* tracer = new UniTracer(options);
     UniMemory::ExitIfOutOfMemory((void *)tracer);
 
-    CollectorOptions collector_options;
-    collector_options.metric_stream = false;
-    collector_options.stall_sampling = false;
     ZeCollector* ze_collector = nullptr;
-
-    if (tracer->CheckOption(TRACE_DEVICE_TIMING)) {
-
-      collector_options.kernel_tracing = true;
-      collector_options.device_timing = tracer->CheckOption(TRACE_DEVICE_TIMING);
+    ze_collector = ZeCollector::Create();
+    if (ze_collector == nullptr) {
+      std::cerr <<
+        "[WARNING] Unable to create kernel collector for L0 backend" <<
+        std::endl;
     }
-
-    if (tracer->CheckOption(TRACE_METRIC_STREAM)) {
-      collector_options.metric_stream = true;
-      if (utils::GetEnv("UNITRACE_MetricGroup") == "EuStallSampling") {
-        collector_options.stall_sampling = true;
-      }
-    }
-
-    if (collector_options.kernel_tracing || collector_options.api_tracing) {
-
-      ze_collector = ZeCollector::Create(collector_options);
-      if (ze_collector == nullptr) {
-        std::cerr <<
-          "[WARNING] Unable to create kernel collector for L0 backend" <<
-          std::endl;
-      }
-      tracer->ze_collector_ = ze_collector;
-    }
-
+    tracer->ze_collector_ = ze_collector;
+    
     return tracer;
   }
 

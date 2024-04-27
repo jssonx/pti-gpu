@@ -27,7 +27,6 @@
 
 #include "utils.h"
 #include "ze_utils.h"
-#include "collector_options.h"
 #include "unikernel.h"
 #include "unimemory.h"
 
@@ -76,16 +75,14 @@ ze_result_t (*zexKernelGetBaseAddress)(ze_kernel_handle_t hKernel, uint64_t *bas
 class ZeCollector {
  public: // Interface
 
-  static ZeCollector* Create(
-      CollectorOptions options) {
+  static ZeCollector* Create() {
     ze_api_version_t version = utils::ze::GetVersion();
     PTI_ASSERT(
         ZE_MAJOR_VERSION(version) >= 1 &&
         ZE_MINOR_VERSION(version) >= 2);
 
     std::string data_dir_name = utils::GetEnv("UNITRACE_DataDir");
-    ZeCollector* collector = new ZeCollector(
-        options, data_dir_name);
+    ZeCollector* collector = new ZeCollector(data_dir_name);
 
     UniMemory::ExitIfOutOfMemory((void *)(collector));
 
@@ -134,10 +131,7 @@ class ZeCollector {
 
  private: // Implementation
 
-  ZeCollector(
-      CollectorOptions options,
-      std::string& data_dir_name)
-      : options_(options) {
+  ZeCollector(std::string& data_dir_name) {
     data_dir_name_ = data_dir_name;
     EnumerateAndSetupDevices();
     InitializeKernelCommandProperties();
@@ -378,7 +372,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       // for stall sampling
       uint64_t base_addr = 0;
       uint64_t binary_size = 0;
-      if (collector->options_.stall_sampling && (zexKernelGetBaseAddress != nullptr) && (zexKernelGetBaseAddress(kernel, &base_addr) == ZE_RESULT_SUCCESS)) {
+      if ((zexKernelGetBaseAddress != nullptr) && (zexKernelGetBaseAddress(kernel, &base_addr) == ZE_RESULT_SUCCESS)) {
         base_addr &= 0xFFFFFFFF;
         binary_size = module_binary_size;	// store module binary size. only an upper bound is needed
       }
@@ -436,7 +430,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
 
  private: // Data
   zel_tracer_handle_t tracer_ = nullptr;
-  CollectorOptions options_;
   std::string data_dir_name_;
 };
 
