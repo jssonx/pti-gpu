@@ -30,7 +30,6 @@
 #include "unikernel.h"
 #include "unimemory.h"
 
-#include "common_header.h"
 
 struct ZeKernelCommandProperties {
   uint64_t id_;		// unique identidier

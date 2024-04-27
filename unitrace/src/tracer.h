@@ -15,19 +15,18 @@
 #include <sstream>
 #include <string>
 
-#include "trace_options.h"
 #include "utils.h"
 #include "ze_collector.h"
 #include "unimemory.h"
 
 class UniTracer {
  public:
-  static UniTracer* Create(const TraceOptions& options) {
+  static UniTracer* Create() {
     ze_result_t status = ZE_RESULT_SUCCESS;
     status = zeInit(ZE_INIT_FLAG_GPU_ONLY);
     PTI_ASSERT(status == ZE_RESULT_SUCCESS);
 
-    UniTracer* tracer = new UniTracer(options);
+    UniTracer* tracer = new UniTracer();
     UniMemory::ExitIfOutOfMemory((void *)tracer);
 
     ZeCollector* ze_collector = nullptr;
@@ -43,33 +42,19 @@ class UniTracer {
   }
 
   ~UniTracer() {
-
     if (ze_collector_ != nullptr) {
       ze_collector_->DisableTracing();
       delete ze_collector_;
     }
-    
-    if (CheckOption(TRACE_LOG_TO_FILE)) {
-      std::cerr << "[INFO] Log is stored in " <<
-        options_.GetLogFileName() << std::endl;
-    }
-  }
-
-  bool CheckOption(uint32_t option) {
-    return options_.CheckFlag(option);
   }
 
   UniTracer(const UniTracer& that) = delete;
   UniTracer& operator=(const UniTracer& that) = delete;
 
  private:
-  UniTracer(const TraceOptions& options)
-      : options_(options) {
-  }
+  UniTracer(){}
 
  private:
-  TraceOptions options_;
-
   uint64_t total_execution_time_ = 0;
 
   ZeCollector* ze_collector_ = nullptr;
