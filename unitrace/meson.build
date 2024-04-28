@@ -15,7 +15,7 @@ if not level0_dep.found()
   error('Level Zero library not found. Please check installation.')
 endif
 
-inc_dirs = include_directories('src', 'utils', 'src/levelzero')
+inc_dirs = include_directories('src', 'src/levelzero')
 
 unitrace_tool = shared_library(
   'unitrace_tool',

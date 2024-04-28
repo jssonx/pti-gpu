@@ -7,19 +7,14 @@
 #ifndef PTI_TOOLS_UNITRACE_LEVEL_ZERO_COLLECTOR_H_
 #define PTI_TOOLS_UNITRACE_LEVEL_ZERO_COLLECTOR_H_
 
-#include <chrono>
 #include <atomic>
-#include <iomanip>
 #include <iostream>
-#include <list>
 #include <map>
 #include <mutex>
 #include <shared_mutex>
-#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
-#include <cmath>
 #include <dlfcn.h>
 
 #include <level_zero/ze_api.h>
@@ -39,8 +34,6 @@ struct ZeKernelCommandProperties {
   uint64_t base_addr_;	// kernel base address
   ze_device_handle_t device_;
   int32_t device_id_;
-  uint32_t regsize_;	// GRF size per thread
-  bool aot_;		// AOT or JIT
   std::string name_;	// kernel or command name
 };
 
@@ -51,7 +44,6 @@ static std::map<uint64_t, ZeKernelCommandProperties> *kernel_command_properties_
 struct ZeModule {
   ze_device_handle_t device_;
   size_t size_;
-  bool aot_;	// AOT or JIT
 };
 
 static std::shared_mutex modules_on_devices_mutex_;
@@ -277,7 +269,6 @@ class ZeCollector {
       
       m.device_ = device;
       m.size_ = binary_size;
-      m.aot_ = (*(params->pdesc))->format;
     
       modules_on_devices_mutex_.lock();
       modules_on_devices_.insert({mod, std::move(m)});
@@ -310,13 +301,11 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       ze_module_handle_t mod = *(params->phModule);
       ze_device_handle_t device = nullptr;
       size_t module_binary_size = (size_t)(-1);
-      bool aot = false;
       modules_on_devices_mutex_.lock_shared();
       auto mit = modules_on_devices_.find(mod);
       if (mit != modules_on_devices_.end()) {
         device = mit->second.device_; 
         module_binary_size = mit->second.size_;
-        aot = mit->second.aot_;
       }
       modules_on_devices_mutex_.unlock_shared();
 
@@ -332,8 +321,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       kernel_command_properties_mutex_.lock();
 
       ZeKernelCommandProperties desc;
-
-      desc.aot_ = aot;
 
       ze_result_t status;
 
@@ -360,14 +347,10 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       desc.device_id_ = did;
       desc.device_ = device;
 
-      ze_kernel_properties_t kprops{};
-
-      zex_kernel_register_file_size_exp_t regsize{};
-      kprops.pNext = (void *)&regsize;
+      ze_kernel_properties_t kprops{};  
 
       status = zeKernelGetProperties(kernel, &kprops);
       PTI_ASSERT(status == ZE_RESULT_SUCCESS);
-      desc.regsize_ = regsize.registerFileSize;
 
       // for stall sampling
       uint64_t base_addr = 0;

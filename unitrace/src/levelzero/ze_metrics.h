@@ -11,16 +11,10 @@
 #include <string.h>
 
 #include <level_zero/ze_api.h>
-#include <level_zero/zes_api.h>
 #include <level_zero/zet_api.h>
-#include <level_zero/layers/zel_tracing_api.h>
 
-#include <algorithm>
-#include <iomanip>
 #include <iostream>
-#include <algorithm>
 #include <map>
-#include <set>
 #include <vector>
 #include <atomic>
 #include <sstream>
