@@ -5,7 +5,7 @@
         "name": "Debug unitrace with gdb-oneapi",
         "type": "cppdbg",
         "request": "launch",
-        "program": "/home/users/yuning/pg/ra/pti-gpu/unitrace/build/unitrace",
+        "program": "/home/users/yuning/pg/ra/pti-gpu/build/unitrace",
         "args": [
           "--stall-sampling",
           "-o",
@@ -35,7 +35,7 @@
         "name": "Attach to Process",
         "type": "cppdbg",
         "request": "attach",
-        "program": "/home/users/yuning/pg/ra/pti-gpu/tools/unitrace/build/unitrace",
+        "program": "/home/users/yuning/pg/ra/pti-gpu/build/unitrace",
         "processId": "${command:pickProcess}",
         "MIMode": "gdb",
         "miDebuggerPath": "/home/users/yuning/intel/oneapi/debugger/latest/bin/gdb-oneapi",

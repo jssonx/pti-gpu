@@ -1,5 +1,5 @@
 project(
-  'pc-sampling', 
+  'pcsampling', 
   'cpp',
   version : '0.1',
   meson_version: '>=1.1.0',
