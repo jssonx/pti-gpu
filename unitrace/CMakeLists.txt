@@ -216,30 +216,8 @@ macro(FindHeadersPath TARGET L0_GEN_SCRIPT GEN_FILE_NAME custom_target)
     ${custom_target})
 endmacro()
 
-
-if (BUILD_WITH_MPI)
-  find_package(MPI REQUIRED)
-  add_library(unitrace_mpi SHARED
-    "${PROJECT_SOURCE_DIR}/src/mpi/mpi.c")
-
-  target_link_libraries(unitrace_mpi
-    PUBLIC MPI::MPI_C)
-  target_include_directories(unitrace_mpi
-    PRIVATE "${PROJECT_SOURCE_DIR}"
-    PRIVATE "${I_MPI_ROOT}/include"
-    PRIVATE "${PROJECT_SOURCE_DIR}/src"
-    PRIVATE "${PROJECT_SOURCE_DIR}/utils"
-    PRIVATE "${PROJECT_SOURCE_DIR}/src/mpi"
-    PRIVATE "${PROJECT_SOURCE_DIR}/src/levelzero")
-  if(CMAKE_INCLUDE_PATH)
-    target_include_directories(unitrace_mpi
-      PUBLIC "${CMAKE_INCLUDE_PATH}")
-  endif()
-endif()
-
 add_library(unitrace_tool SHARED
   "${PROJECT_SOURCE_DIR}/src/tracer.cc")
-target_compile_options(unitrace_tool PRIVATE -g -O0)
 link_directories(${ONEAPI_COMPILER_HOME}/lib)
 target_include_directories(unitrace_tool
   PRIVATE "${PROJECT_SOURCE_DIR}"
@@ -261,14 +239,6 @@ target_include_directories(unitrace_tool PRIVATE "${L0_INC_PATH}")
 # Loader
 
 add_executable(unitrace "${PROJECT_SOURCE_DIR}/src/unitrace.cc")
-set(_use_mpi 1)
-
-if (BUILD_WITH_MPI)
-  set(_use_mpi 1)
-else()
-  set(_use_mpi 0)
-endif()
-target_compile_definitions(unitrace PRIVATE BUILD_WITH_MPI=${_use_mpi})
 target_include_directories(unitrace
   PRIVATE "${CMAKE_BINARY_DIR}"
   PRIVATE "${PROJECT_SOURCE_DIR}/src"
@@ -283,6 +253,3 @@ FindL0Headers(unitrace)
 # Installation
 
 install(TARGETS unitrace unitrace_tool DESTINATION bin)
-if (BUILD_WITH_MPI)
-  install(TARGETS unitrace_mpi DESTINATION bin)
-endif()

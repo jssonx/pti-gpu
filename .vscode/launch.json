@@ -5,7 +5,7 @@
         "name": "Debug unitrace with gdb-oneapi",
         "type": "cppdbg",
         "request": "launch",
-        "program": "~/pg/ra/pti-gpu/unitrace/build/unitrace",
+        "program": "/home/users/yuning/pg/ra/pti-gpu/unitrace/build/unitrace",
         "args": [
           "--stall-sampling",
           "-o",
