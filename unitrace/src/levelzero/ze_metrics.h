@@ -217,7 +217,7 @@ class ZeMetricProfiler {
               status = zeDeviceGetSubDevices(device, &num_sub_devices, sub_devices.data());
               PTI_ASSERT(status == ZE_RESULT_SUCCESS);
 
-              for (int j = 0; j < num_sub_devices; j++) {
+              for (uint32_t j = 0; j < num_sub_devices; j++) {
                 ZeDeviceDescriptor *sub_desc = new ZeDeviceDescriptor;
                 UniMemory::ExitIfOutOfMemory((void *)(sub_desc));
   
@@ -362,7 +362,7 @@ class ZeMetricProfiler {
               std::getline(kpf, line);
               size = std::strtol(line.c_str(), nullptr, 0);
 
-              if (kname.size() > max_kname_size) {
+              if (kname.size() > static_cast<std::string::size_type>(max_kname_size)) {
                 max_kname_size = kname.size();
               }
               kprops.insert({base_addr, {std::move(kname), size}});
@@ -439,7 +439,7 @@ class ZeMetricProfiler {
   
               uint32_t size = samples[i];
                   
-              for (int j = 0; j < size; j += metric_list.size()) {
+              for (uint32_t j = 0; j < size; j += metric_list.size()) {
                 uint64_t ip;
                 ip = (value[j + 0].value.ui64 << 3);
                 if (ip == 0) {
@@ -489,7 +489,7 @@ class ZeMetricProfiler {
         field_sizes[1] = std::max(sizeof("0x00000000") - 1, metric_list[0].size());
         header += std::string(std::max(int(field_sizes[0] + 1 - sizeof("Kernel")), 0), ' ') + "Kernel, ";
         header += std::string(std::max(int(field_sizes[1] - metric_list[0].length()), 0), ' ') + metric_list[0] + ", ";
-        for (int i = 1; i <  metric_list.size(); i++) {
+        for (std::vector<std::string>::size_type i = 1; i <  metric_list.size(); i++) {
           field_sizes[i + 1] = metric_list[i].size();
           header += metric_list[i] + ", ";
         }

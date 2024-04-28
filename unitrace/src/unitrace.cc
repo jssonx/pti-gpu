@@ -142,11 +142,9 @@ int main(int argc, char *argv[]) {
 
   std::string executable_path = utils::GetExecutablePath();
 
-  bool use_ld_lib_path = false;
   std::string lib_path = executable_path + LIB_UNITRACE_TOOL_NAME;
   FILE *fp = fopen(lib_path.c_str(), "rb");
   if (fp == nullptr) {
-    use_ld_lib_path = true;
     lib_path = LIB_UNITRACE_TOOL_NAME;
   }
   else {

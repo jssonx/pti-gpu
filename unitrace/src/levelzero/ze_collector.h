@@ -194,7 +194,7 @@ class ZeCollector {
               status = zeDeviceGetSubDevices(device, &num_sub_devices, sub_devices.data());
               PTI_ASSERT(status == ZE_RESULT_SUCCESS);
 
-              for (int j = 0; j < num_sub_devices; j++) {
+              for (uint32_t j = 0; j < num_sub_devices; j++) {
                 ZeDevice sub_desc;
   
                 sub_desc.device_ = sub_devices[j];
@@ -304,7 +304,6 @@ typedef struct _zex_kernel_register_file_size_exp_t {
 
   static void OnExitKernelCreate(ze_kernel_create_params_t *params, ze_result_t result, void* global_data) {
     if (result == ZE_RESULT_SUCCESS) {
-      ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
       ze_kernel_handle_t kernel = **(params->pphKernel);
 
       ze_module_handle_t mod = *(params->phModule);
