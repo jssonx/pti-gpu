@@ -9,8 +9,6 @@
 
 #include <iostream>
 
-#include <level_zero/layers/zel_tracing_api.h>
-
 class UniKernelId{
   public:
     static uint64_t GetKernelId(void) {

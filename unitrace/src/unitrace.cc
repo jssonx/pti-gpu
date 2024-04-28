@@ -77,11 +77,6 @@ int ParseArgs(int argc, char* argv[]) {
   }
 
   if (utils::GetEnv("UNITRACE_KernelMetrics") == "1") {
-    // kernel tracing must be on 
-    if (utils::GetEnv("UNITRACE_DeviceTiming").empty()) {
-      utils::SetEnv("UNITRACE_DeviceTiming", "1");
-    }
-
     // default sampling interval is 50 us
     // does not hurt to set UNITRACE_SamplingInterval in query mode
     if (utils::GetEnv("UNITRACE_SamplingInterval").empty()) {
