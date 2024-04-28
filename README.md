@@ -44,8 +44,6 @@ The options can be one or more of the following:
 
 The **--stall-sampling** works on Intel(R) Data Center GPU Max Series and later products.
 
-![Metric Query!](/tools/unitrace/doc/images/stall-sampling.png)
-
 To kernels that take short time, you may find that the default sampling rate is not high enough and the sampling rate or the sampling interval needs to be changed using **--sampling-interval [-i]** option.
 
 In case of execution unit stall analysis, the **--stall-sampling** will give you instruction addresses and reasons of stalls.
