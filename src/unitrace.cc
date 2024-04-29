@@ -206,14 +206,28 @@ int main(int argc, char *argv[]) {
 
     child = fork();
     if (child == 0) {
-      // child process
-      utils::SetEnv("UNITRACE_DataDir", data_dir);
-      if (execvp(app_args[0], app_args.data())) {
-        std::cerr << "[ERROR] Failed to launch target application: " << app_args[0] << std::endl;
-        Usage(argv[0]);
-       
-        std::_Exit(-1);
-      }
+        // child process
+        utils::SetEnv("UNITRACE_DataDir", data_dir);
+        std::string target_file = app_args[0];
+        std::string file_extension = target_file.substr(target_file.find_last_of(".") + 1);
+
+        if (file_extension == "py") {
+            std::vector<char*> python_args;
+            python_args.push_back(const_cast<char*>("python"));
+            python_args.insert(python_args.end(), app_args.begin(), app_args.end());
+            python_args.push_back(nullptr);
+            if (execvp("python", python_args.data())) {
+                std::cerr << "[ERROR] Failed to launch Python application: " << app_args[0] << std::endl;
+                Usage(argv[0]);
+                std::_Exit(-1);
+            }
+        } else {
+            if (execvp(app_args[0], app_args.data())) {
+                std::cerr << "[ERROR] Failed to launch target application: " << app_args[0] << std::endl;
+                Usage(argv[0]);
+                std::_Exit(-1);
+            }
+        }
     } else if (child > 0) {
       // parent process
 
