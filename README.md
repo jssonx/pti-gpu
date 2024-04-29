@@ -1,8 +1,8 @@
-# PC Sampling in Intel GPU
+# PC Sampling for Intel GPU
 
 ## Introduction
 
-This a performnce tool for Intel(R) oneAPI applications. It traces and profiles host/device activites, interactions and hardware utilizations for Intel(R) GPU applications.
+PC Sampling for Intel GPU is a performance analysis tool designed for Intel(R) oneAPI applications. It enables tracing and profiling of hardware utilizations specifically for Intel(R) GPU applications.
 
 ## Supported Platforms
 
@@ -16,12 +16,12 @@ This a performnce tool for Intel(R) oneAPI applications. It traces and profiles 
 - C++ compiler with C++17 support
 - Intel(R) oneAPI Base Toolkits
 - Python
-- Intel(R) MPI (optional)
 
 ## Build
 
 ```sh
-set up Intel(R) oneAPI environment
+# set up Intel(R) oneAPI environment
+source ~/intel/oneapi/setvars.sh intel64
 
 meson setup build
 ninja -C build
@@ -40,10 +40,21 @@ The options can be one or more of the following:
 --stall-sampling               Sample hardware execution unit stalls. Valid for Intel(R) Data Center GPU Max Series and later GPUs
 ```
 
-### Stall Sampling
+## Test
 
-The **--stall-sampling** works on Intel(R) Data Center GPU Max Series and later products.
+### PyTorch
+```sh
+conda install --file requirements.txt -c intel -c conda-forge
+unitrace --stall-sampling -o ~/pg/ra/pti-gpu/unitrace ~/pg/ra/pti-gpu/test/python/resnet50.py
+```
 
-To kernels that take short time, you may find that the default sampling rate is not high enough and the sampling rate or the sampling interval needs to be changed using **--sampling-interval [-i]** option.
+### Minitest in HPCToolkit
+```sh
+unitrace --stall-sampling -o ~/pg/ra/pti-gpu/unitrace ~/pg/qahpct/minitest/intelgpu/single.sycloffload.ipcx/single.sycloffload.icpx.intelgpu
+```
 
-In case of execution unit stall analysis, the **--stall-sampling** will give you instruction addresses and reasons of stalls.
+## Stall Sampling
+
+The `--stall-sampling` option works on Intel(R) Data Center GPU Max Series and later products. For kernels with short execution times, the default sampling rate may not be sufficient. In such cases, adjust the sampling rate or interval using the `--sampling-interval [-i]` option.
+
+When using `--stall-sampling`, the tool provides instruction addresses and reasons for stalls, enabling in-depth analysis of execution unit stalls.
