@@ -43,31 +43,14 @@ int ParseArgs(int argc, char* argv[]) {
   bool stall_sampling = false;
   int app_index = 1;
 
-  for (int i = 1; i < argc; ++i) {
-    if (strcmp(argv[i], "--stall-sampling") == 0) {
-      stall_sampling = true;
-      ++app_index;
-    } else if (strcmp(argv[i], "--sampling-interval") == 0 || strcmp(argv[i], "-i") == 0) {
-      ++i;
-      if (i >= argc) {
-        std::cout << "[ERROR] Sampling interval is not specified" << std::endl;
-        return -1;
-      }
-      utils::SetEnv("UNITRACE_SamplingInterval", argv[i]);
-      app_index += 2;
-    } else if (strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0) {
-      utils::SetEnv("UNITRACE_LogToFile", "1");
-      ++i;
-      if (i >= argc) {
-        std::cerr << "[ERROR] Log file name is not specified" << std::endl;
-        return -1;
-      }
-      utils::SetEnv("UNITRACE_LogFilename", argv[i]);
-      app_index += 2;
-    } else {
-      break;
-    }
+  stall_sampling = true;
+
+  utils::SetEnv("UNITRACE_LogToFile", "1");
+  std::filesystem::path logDir = "/tmp/intelpc/";
+  if (!std::filesystem::exists(logDir)) {
+      std::filesystem::create_directories(logDir);
   }
+  utils::SetEnv("UNITRACE_LogFilename", "/tmp/intelpc/");
 
   if (stall_sampling) {
     if (utils::GetEnv("UNITRACE_MetricGroup").empty()) {
