@@ -24,9 +24,110 @@
 #include "utils.h"
 #include "ze_utils.h"
 #include "unikernel.h"
-#include "unimemory.h"
-#include "demangle.h"
 
+static const char* GetResultString(unsigned result) {
+  switch (result) {
+    case ZE_RESULT_SUCCESS:
+      return "ZE_RESULT_SUCCESS";
+    case ZE_RESULT_NOT_READY:
+      return "ZE_RESULT_NOT_READY";
+    case ZE_RESULT_ERROR_DEVICE_LOST:
+      return "ZE_RESULT_ERROR_DEVICE_LOST";
+    case ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY:
+      return "ZE_RESULT_ERROR_OUT_OF_HOST_MEMORY";
+    case ZE_RESULT_ERROR_OUT_OF_DEVICE_MEMORY:
+      return "ZE_RESULT_ERROR_OUT_OF_DEVICE_MEMORY";
+    case ZE_RESULT_ERROR_MODULE_BUILD_FAILURE:
+      return "ZE_RESULT_ERROR_MODULE_BUILD_FAILURE";
+    case ZE_RESULT_ERROR_MODULE_LINK_FAILURE:
+      return "ZE_RESULT_ERROR_MODULE_LINK_FAILURE";
+    case ZE_RESULT_ERROR_DEVICE_REQUIRES_RESET:
+      return "ZE_RESULT_ERROR_DEVICE_REQUIRES_RESET";
+    case ZE_RESULT_ERROR_DEVICE_IN_LOW_POWER_STATE:
+      return "ZE_RESULT_ERROR_DEVICE_IN_LOW_POWER_STATE";
+    case ZE_RESULT_ERROR_INSUFFICIENT_PERMISSIONS:
+      return "ZE_RESULT_ERROR_INSUFFICIENT_PERMISSIONS";
+    case ZE_RESULT_ERROR_NOT_AVAILABLE:
+      return "ZE_RESULT_ERROR_NOT_AVAILABLE";
+    case ZE_RESULT_ERROR_DEPENDENCY_UNAVAILABLE:
+      return "ZE_RESULT_ERROR_DEPENDENCY_UNAVAILABLE";
+    case ZE_RESULT_WARNING_DROPPED_DATA:
+      return "ZE_RESULT_WARNING_DROPPED_DATA";
+    case ZE_RESULT_ERROR_UNINITIALIZED:
+      return "ZE_RESULT_ERROR_UNINITIALIZED";
+    case ZE_RESULT_ERROR_UNSUPPORTED_VERSION:
+      return "ZE_RESULT_ERROR_UNSUPPORTED_VERSION";
+    case ZE_RESULT_ERROR_UNSUPPORTED_FEATURE:
+      return "ZE_RESULT_ERROR_UNSUPPORTED_FEATURE";
+    case ZE_RESULT_ERROR_INVALID_ARGUMENT:
+      return "ZE_RESULT_ERROR_INVALID_ARGUMENT";
+    case ZE_RESULT_ERROR_INVALID_NULL_HANDLE:
+      return "ZE_RESULT_ERROR_INVALID_NULL_HANDLE";
+    case ZE_RESULT_ERROR_HANDLE_OBJECT_IN_USE:
+      return "ZE_RESULT_ERROR_HANDLE_OBJECT_IN_USE";
+    case ZE_RESULT_ERROR_INVALID_NULL_POINTER:
+      return "ZE_RESULT_ERROR_INVALID_NULL_POINTER";
+    case ZE_RESULT_ERROR_INVALID_SIZE:
+      return "ZE_RESULT_ERROR_INVALID_SIZE";
+    case ZE_RESULT_ERROR_UNSUPPORTED_SIZE:
+      return "ZE_RESULT_ERROR_UNSUPPORTED_SIZE";
+    case ZE_RESULT_ERROR_UNSUPPORTED_ALIGNMENT:
+      return "ZE_RESULT_ERROR_UNSUPPORTED_ALIGNMENT";
+    case ZE_RESULT_ERROR_INVALID_SYNCHRONIZATION_OBJECT:
+      return "ZE_RESULT_ERROR_INVALID_SYNCHRONIZATION_OBJECT";
+    case ZE_RESULT_ERROR_INVALID_ENUMERATION:
+      return "ZE_RESULT_ERROR_INVALID_ENUMERATION";
+    case ZE_RESULT_ERROR_UNSUPPORTED_ENUMERATION:
+      return "ZE_RESULT_ERROR_UNSUPPORTED_ENUMERATION";
+    case ZE_RESULT_ERROR_UNSUPPORTED_IMAGE_FORMAT:
+      return "ZE_RESULT_ERROR_UNSUPPORTED_IMAGE_FORMAT";
+    case ZE_RESULT_ERROR_INVALID_NATIVE_BINARY:
+      return "ZE_RESULT_ERROR_INVALID_NATIVE_BINARY";
+    case ZE_RESULT_ERROR_INVALID_GLOBAL_NAME:
+      return "ZE_RESULT_ERROR_INVALID_GLOBAL_NAME";
+    case ZE_RESULT_ERROR_INVALID_KERNEL_NAME:
+      return "ZE_RESULT_ERROR_INVALID_KERNEL_NAME";
+    case ZE_RESULT_ERROR_INVALID_FUNCTION_NAME:
+      return "ZE_RESULT_ERROR_INVALID_FUNCTION_NAME";
+    case ZE_RESULT_ERROR_INVALID_GROUP_SIZE_DIMENSION:
+      return "ZE_RESULT_ERROR_INVALID_GROUP_SIZE_DIMENSION";
+    case ZE_RESULT_ERROR_INVALID_GLOBAL_WIDTH_DIMENSION:
+      return "ZE_RESULT_ERROR_INVALID_GLOBAL_WIDTH_DIMENSION";
+    case ZE_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_INDEX:
+      return "ZE_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_INDEX";
+    case ZE_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_SIZE:
+      return "ZE_RESULT_ERROR_INVALID_KERNEL_ARGUMENT_SIZE";
+    case ZE_RESULT_ERROR_INVALID_KERNEL_ATTRIBUTE_VALUE:
+      return "ZE_RESULT_ERROR_INVALID_KERNEL_ATTRIBUTE_VALUE";
+    case ZE_RESULT_ERROR_INVALID_MODULE_UNLINKED:
+      return "ZE_RESULT_ERROR_INVALID_MODULE_UNLINKED";
+    case ZE_RESULT_ERROR_INVALID_COMMAND_LIST_TYPE:
+      return "ZE_RESULT_ERROR_INVALID_COMMAND_LIST_TYPE";
+    case ZE_RESULT_ERROR_OVERLAPPING_REGIONS:
+      return "ZE_RESULT_ERROR_OVERLAPPING_REGIONS";
+    case ZE_RESULT_WARNING_ACTION_REQUIRED:
+      return "ZE_RESULT_WARNING_ACTION_REQUIRED";
+    case ZE_RESULT_EXP_ERROR_DEVICE_IS_NOT_VERTEX:
+      return "ZE_RESULT_EXP_ERROR_DEVICE_IS_NOT_VERTEX";
+    case ZE_RESULT_EXP_ERROR_VERTEX_IS_NOT_DEVICE:
+      return "ZE_RESULT_EXP_ERROR_VERTEX_IS_NOT_DEVICE";
+    case ZE_RESULT_EXP_ERROR_REMOTE_DEVICE:
+      return "ZE_RESULT_EXP_ERROR_REMOTE_DEVICE";
+    case ZE_RESULT_ERROR_UNKNOWN:
+      return "ZE_RESULT_ERROR_UNKNOWN";
+    case ZE_RESULT_FORCE_UINT32:
+      return "ZE_RESULT_FORCE_UINT32";
+    default:
+      break;
+  }
+  return "UNKNOWN";
+}
+
+struct ZeKernelGroupSize {
+  uint32_t x;
+  uint32_t y;
+  uint32_t z;
+};
 
 struct ZeKernelCommandProperties {
   uint64_t id_;		// unique identidier
@@ -34,6 +135,15 @@ struct ZeKernelCommandProperties {
   uint64_t base_addr_;	// kernel base address
   ze_device_handle_t device_;
   int32_t device_id_;
+  uint32_t simd_width_;	// SIMD
+  uint32_t nargs_;	// number of kernel arguments
+  uint32_t nsubgrps_;	// maximal number of subgroups
+  uint32_t slmsize_;	// SLM size
+  uint32_t private_mem_size_;	// private memory size for each thread
+  uint32_t spill_mem_size_;	// spill memory size for each thread
+  ZeKernelGroupSize group_size_;	// group size
+  uint32_t regsize_;	// GRF size per thread
+  bool aot_;		// AOT or JIT
   std::string name_;	// kernel or command name
 };
 
@@ -44,6 +154,7 @@ static std::map<uint64_t, ZeKernelCommandProperties> *kernel_command_properties_
 struct ZeModule {
   ze_device_handle_t device_;
   size_t size_;
+  bool aot_;	// AOT or JIT
 };
 
 static std::shared_mutex modules_on_devices_mutex_;
@@ -76,8 +187,6 @@ class ZeCollector {
 
     std::string data_dir_name = utils::GetEnv("UNITRACE_DataDir");
     ZeCollector* collector = new ZeCollector(data_dir_name);
-
-    UniMemory::ExitIfOutOfMemory((void *)(collector));
 
     ze_result_t status = ZE_RESULT_SUCCESS;
     zel_tracer_desc_t tracer_desc = {
@@ -134,7 +243,6 @@ class ZeCollector {
     kernel_command_properties_mutex_.lock();
     if (kernel_command_properties_ == nullptr) {
       kernel_command_properties_ = new std::map<uint64_t, ZeKernelCommandProperties>;
-      UniMemory::ExitIfOutOfMemory((void *)(kernel_command_properties_));
     }
     kernel_command_properties_mutex_.unlock();
   }
@@ -142,7 +250,6 @@ class ZeCollector {
   void EnumerateAndSetupDevices() {
     if (devices_ == nullptr) {
       devices_ = new std::map<ze_device_handle_t, ZeDevice>;
-      UniMemory::ExitIfOutOfMemory((void *)(devices_));
     }
 
     ze_result_t status = ZE_RESULT_SUCCESS;
@@ -234,7 +341,7 @@ class ZeCollector {
       uint64_t prev_base = 0;
       for (auto it = props.second.crbegin(); it != props.second.crend(); it++) {
         // quote kernel name which may contain "," 
-        kpfs << "\"" << utils::Demangle(it->second->name_.c_str()) << "\"" << std::endl;
+        kpfs << "\"" << it->second->name_.c_str() << "\"" << std::endl;
         kpfs << it->second->base_addr_ << std::endl;
         if (prev_base == 0) {
           kpfs << it->second->size_ << std::endl;
@@ -296,16 +403,19 @@ typedef struct _zex_kernel_register_file_size_exp_t {
 
   static void OnExitKernelCreate(ze_kernel_create_params_t *params, ze_result_t result, void* global_data) {
     if (result == ZE_RESULT_SUCCESS) {
+      ZeCollector* collector = reinterpret_cast<ZeCollector*>(global_data);
       ze_kernel_handle_t kernel = **(params->pphKernel);
 
       ze_module_handle_t mod = *(params->phModule);
       ze_device_handle_t device = nullptr;
       size_t module_binary_size = (size_t)(-1);
+      bool aot = false;
       modules_on_devices_mutex_.lock_shared();
       auto mit = modules_on_devices_.find(mod);
       if (mit != modules_on_devices_.end()) {
         device = mit->second.device_; 
         module_binary_size = mit->second.size_;
+        aot = mit->second.aot_;
       }
       modules_on_devices_mutex_.unlock_shared();
 
@@ -321,6 +431,8 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       kernel_command_properties_mutex_.lock();
 
       ZeKernelCommandProperties desc;
+
+      desc.aot_ = aot;
 
       ze_result_t status;
 
@@ -348,9 +460,20 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       desc.device_ = device;
 
       ze_kernel_properties_t kprops{};  
+      zex_kernel_register_file_size_exp_t regsize{};
+      kprops.pNext = (void *)&regsize;
 
       status = zeKernelGetProperties(kernel, &kprops);
       PTI_ASSERT(status == ZE_RESULT_SUCCESS);
+      desc.simd_width_ = kprops.maxSubgroupSize;
+      desc.nargs_ = kprops.numKernelArgs;
+      desc.nsubgrps_ = kprops.maxNumSubgroups;
+      desc.slmsize_ = kprops.localMemSize;
+      desc.private_mem_size_ = kprops.privateMemSize;
+      desc.spill_mem_size_ = kprops.spillMemSize;
+      ZeKernelGroupSize group_size{kprops.requiredGroupSizeX, kprops.requiredGroupSizeY, kprops.requiredGroupSizeZ};
+      desc.group_size_ = group_size;
+      desc.regsize_ = regsize.registerFileSize;
 
       // for stall sampling
       uint64_t base_addr = 0;
@@ -375,7 +498,50 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       ze_result_t result,
       void* global_user_data,
       void** instance_user_data) {
-    OnExitModuleCreate(params, result, global_user_data); 
+    OnExitModuleCreate(params, result, global_user_data);
+
+    std::string str;
+    str += "<PID:" + std::to_string(utils::GetPid()) + "> ";
+    str += "<TID:" + std::to_string((unsigned int)utils::GetTid()) + "> ";
+    str +="zeModuleCreate";
+    if (result == ZE_RESULT_SUCCESS) {
+      if (*(params->pphModule) != nullptr) {
+        str += " hModule = ";
+        str += std::to_string((long long unsigned int)**(params->pphModule));
+      }
+      if (*(params->pphBuildLog) != nullptr) {
+        str += " hBuildLog = ";
+        str += std::to_string((long long unsigned int)**(params->pphBuildLog));
+      }
+    }
+    str += " -> ";
+    str +=  GetResultString(result);
+    str += "(0x" + std::to_string(result) + ")\n";
+    bool aot = (*(params->pdesc))->format; 
+    unsigned int kcount = 0; 
+    if (zeModuleGetKernelNames(**(params->pphModule), &kcount, NULL) == ZE_RESULT_SUCCESS) {
+      if (aot) { 
+        str += "AOT (AOT_BINARY) "; 
+      }
+      else {
+        str += "JIT (IL_SPIRV) "; 
+      }
+      str += "kernels in module: " + std::to_string(kcount) + "\n";
+    }
+    char *p = (char *)malloc(kcount * 1024 + kcount * sizeof(char **));
+    const char **knames = (const char **)p;
+    char *q = p + kcount * sizeof(char **);
+    for (int i = 0; i < kcount; i++) {
+      knames[i] = q;
+      q += 1024;
+    }
+    if (zeModuleGetKernelNames(**(params->pphModule), &kcount, knames) == ZE_RESULT_SUCCESS) {
+      for (int i = 0; i < kcount; i++) {
+        str += "Kernel #" + std::to_string(i) + ": " + knames[i] + "\n";
+      }
+    }
+    free(p);
+    // std::cerr << "zeModuleCreateOnExit: " << str << std::endl; // TODO
   }
 
   static void zeModuleDestroyOnEnter(
@@ -384,7 +550,7 @@ typedef struct _zex_kernel_register_file_size_exp_t {
       void* global_user_data,
       void** instance_user_data) {
     OnEnterModuleDestroy(params, global_user_data); 
-  }
+  } 
 
   static void zeKernelCreateOnExit(
       ze_kernel_create_params_t* params,

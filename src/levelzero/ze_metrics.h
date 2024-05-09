@@ -499,6 +499,13 @@ class ZeMetricProfiler {
 
               char offset[128];
               snprintf(offset, sizeof(offset), "0x%08lx", (it->first - rit->first));
+
+              uint64_t base_addr = rit->first;
+              uint64_t ip_offset = it->first - rit->first;
+              uint64_t abs_addr = base_addr + ip_offset;
+              char hpc_addr[32];
+              snprintf(hpc_addr, sizeof(hpc_addr), "8%011lx", abs_addr);
+
               line = std::string(std::max(int(field_sizes[0] - rit->second.first.length()), 0), ' ') +
                      rit->second.first + ", " +
                      std::string(std::max(int(field_sizes[1] - std::string(offset).length()), 0), ' ') +
@@ -520,7 +527,7 @@ class ZeMetricProfiler {
                      std::string(std::max(int(field_sizes[9] - std::to_string(it->second.insfetch_).length()), 0), ' ') +
                      std::to_string(it->second.insfetch_) + ", " +
                      std::string(std::max(int(field_sizes[10] - std::to_string(it->second.other_).length()), 0), ' ') +
-                     std::to_string(it->second.other_) + ", \n";  
+                     std::to_string(it->second.other_) + std::string(hpc_addr) + ", \n";  
               logger_->Log(line);
               break;
             }

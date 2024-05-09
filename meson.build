@@ -17,12 +17,13 @@ endif
 
 inc_dirs = include_directories('src', 'src/levelzero')
 
-unitrace_tool = shared_module(
+unitrace_tool = shared_library(
   'unitrace_tool',
   sources : ['src/tracer.cc'],
   include_directories : inc_dirs,
   dependencies : [level0_dep],
   cpp_args : ['-fvisibility=default'],
+  link_args : ['-L/usr/lib/x86_64-linux-gnu/', '-liga64'],
 )
 
 unitrace_exe = executable(

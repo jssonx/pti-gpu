@@ -17,6 +17,8 @@
 
 #include "ze_collector.h"
 #include "unimemory.h"
+#include "ze_debug_info_collector.h"
+
 
 class UniTracer {
  public:
@@ -41,6 +43,12 @@ class UniTracer {
   }
 
   ~UniTracer() {
+    if (za_debug_collector != nullptr) {
+      za_debug_collector->DisableTracing();
+      PrintResults();
+      delete za_debug_collector;
+    }
+
     if (ze_collector_ != nullptr) {
       ze_collector_->DisableTracing();
       delete ze_collector_;
@@ -51,10 +59,30 @@ class UniTracer {
   UniTracer& operator=(const UniTracer& that) = delete;
 
  private:
-  UniTracer(){}
+  UniTracer(){
+    utils::SetEnv("PTI_ENABLE", "1");
+    za_debug_collector = ZeDebugInfoCollector::Create();
+  }
+
+  void PrintResults() {
+    PTI_ASSERT(za_debug_collector != nullptr);
+
+    const KernelDebugInfoMap& debug_info_map =
+      za_debug_collector->GetKernelDebugInfoMap();
+    if (debug_info_map.size() == 0) {
+      return;
+    }
+
+    std::cerr << std::endl;
+    for (auto pair : debug_info_map) {
+      ZeDebugInfoCollector::PrintKernelDebugInfo(pair.first, pair.second);
+    }
+  }
 
  private:
   ZeCollector* ze_collector_ = nullptr;
+  ZeDebugInfoCollector* za_debug_collector = nullptr;
 };
+
 
 #endif // PTI_TOOLS_UNITRACE_UNIFIED_TRACER_H_
