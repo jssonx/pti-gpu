@@ -60,7 +60,6 @@ class UniTracer {
 
  private:
   UniTracer(){
-    utils::SetEnv("PTI_ENABLE", "1");
     za_debug_collector = ZeDebugInfoCollector::Create();
   }
 
